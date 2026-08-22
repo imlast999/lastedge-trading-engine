@@ -7,57 +7,65 @@
 
 ## 1. Active Production Strategies Overview
 
-Every production strategy inherits from `BaseStrategy` and specifies exact parameters, indicator definitions, and entry/exit setups.
+Every production strategy inherits from `BaseStrategy` and specifies exact parameters, indicator definitions, and entry/exit setups extracted directly from source code:
 
-| Strategy | File | Symbol | Timeframe | Version | Strategy Type |
-|---|---|---|---|---|---|
-| **EURUSD Simple** | `strategies/eurusd.py` | EURUSD | H1 | `2.0` | EMA Trend Pullback + ATR Filter |
-| **XAUUSD Simple** | `strategies/xauusd.py` | XAUUSD | H1 | `2.0` | Volatility Breakout + ATR Trailing |
-| **BTCEUR New** | `strategies/btceur_new.py` | BTCEUR | H1 | `1.1` | Regime Momentum & Dynamic Bands |
-| **BTCEUR Partial** | `strategies/btceur_partial.py` | BTCEUR | H1 | `1.1` | Regime Momentum with Partial Take Profit |
-| **XAUUSD Partial** | `strategies/xauusd_partial.py` | XAUUSD | H1 | `2.0` | Volatility Breakout with Partial Take Profit |
+| Strategy Name | Source File | Class Name | Symbol | Timeframe | Version | Required History |
+|---|---|---|---|---|---|:---:|
+| `eurusd_simple` | `strategies/eurusd.py` | `EURUSDStrategy` | EURUSD | H1 | `2.0` | 200 bars |
+| `xauusd_simple` | `strategies/xauusd.py` | `XAUUSDStrategy` | XAUUSD | H1 | `1.0` | 200 bars |
+| `btceur_simple` | `strategies/btceur_new.py` | `BTCEURStrategy` | BTCEUR | H1 | `1.0` | 210 bars |
+| `btceur_partial`| `strategies/btceur_partial.py` | `BTCEURPartialStrategy` | BTCEUR | H1 | `1.1` | 210 bars |
+| `xauusd_partial`| `strategies/xauusd_partial.py` | `XAUUSDPartialStrategy` | XAUUSD | H1 | `2.0` | 200 bars |
 
 ---
 
-## 2. Strategy Technical Specifications
+## 2. Quantitative Strategy Specifications
 
 ### 2.1 EURUSD Strategy (`strategies/eurusd.py`)
-- **Instrument**: `EURUSD` | **Timeframe**: `H1` | **Warmup History**: 200 bars.
+- **Metadata**: `StrategyMetadata(required_history=200, symbol='EURUSD', timeframe='H1', strategy_name='eurusd_simple', version='2.0')`
 - **Indicators**:
-  - Fast EMA: Period 21
-  - Slow EMA: Period 55
-  - Trend Filter EMA: Period 200
-  - ATR: Period 14
-  - RSI: Period 14
+  - `ema_fast`: Period 20 (`ema20`)
+  - `ema_slow`: Period 50 (`ema50`)
+  - `ema_trend`: Period 200 (`ema200`)
+  - `rsi`: Period 14 (Operational zone: 38 to 62)
+  - `atr`: Period 14
 - **Entry Rules**:
-  - **BUY**: `Close > EMA200` AND `EMA21 > EMA55` AND `RSI > 50` AND `Pullback low touches EMA21`.
-  - **SELL**: `Close < EMA200` AND `EMA21 < EMA55` AND `RSI < 50` AND `Pullback high touches EMA21`.
+  - **BUY**: `ema20 > ema50` AND `Close > ema200` AND `RSI in [38, 62]` AND `EMA separation >= 0.01%` AND `Price near EMA20 (<= 0.3%)`.
+  - **SELL**: `ema20 < ema50` AND `Close < ema200` AND `RSI in [38, 62]` AND `EMA separation >= 0.01%` AND `Price near EMA20 (<= 0.3%)`.
 - **Exit Rules**:
-  - Stop Loss: `Entry - (1.5 * ATR14)`
-  - Take Profit: `Entry + (2.5 * ATR14)`
+  - **Stop Loss**: `2.0 * ATR14`
+  - **Take Profit**: `4.0 * ATR14` (Risk:Reward ratio 1:2.0)
+  - **Expiry**: 30 minutes
 
 ### 2.2 XAUUSD Strategy (`strategies/xauusd.py`)
-- **Instrument**: `XAUUSD` (Gold) | **Timeframe**: `H1` | **Warmup History**: 200 bars.
+- **Metadata**: `StrategyMetadata(required_history=200, symbol='XAUUSD', timeframe='H1', strategy_name='xauusd_simple', version='1.0')`
 - **Indicators**:
-  - Donchian Channel: Period 20
-  - ATR: Period 14
-  - Volume MA: Period 20
+  - `ema_fast`: Period 20 (`ema20`)
+  - `ema_slow`: Period 50 (`ema50`)
+  - `ema_trend`: Period 200 (`ema200`)
+  - `rsi`: Period 14 (`rsi_buy_threshold=55`, `rsi_sell_threshold=45`)
+  - `atr`: Period 14
 - **Entry Rules**:
-  - **BUY**: Price breaks above 20-bar Donchian High with Volume > Volume MA.
-  - **SELL**: Price breaks below 20-bar Donchian Low with Volume > Volume MA.
+  - **Session Filter**: Active strictly between 06:00 and 22:00 UTC.
+  - **BUY**: `ema20 > ema50` AND `Close > ema200` AND `RSI > 55` AND `EMA separation >= 0.1%` AND `ATR > Mean ATR * 0.8`.
+  - **SELL**: `ema20 < ema50` AND `Close < ema200` AND `RSI < 45` AND `EMA separation >= 0.1%` AND `ATR > Mean ATR * 0.8`.
 - **Exit Rules**:
-  - Stop Loss: `2.0 * ATR14`
-  - Trailing Stop: Activates at `1.0 * ATR` profit, trailing behind `1.5 * ATR`.
+  - **Stop Loss**: `2.0 * ATR14`
+  - **Take Profit**: `5.0 * ATR14` (Risk:Reward ratio 1:2.5)
+  - **Expiry**: 60 minutes
 
 ### 2.3 BTCEUR Strategy (`strategies/btceur_new.py`)
-- **Instrument**: `BTCEUR` | **Timeframe**: `H1` | **Warmup History**: 200 bars.
+- **Metadata**: `StrategyMetadata(required_history=210, symbol='BTCEUR', timeframe='H1', strategy_name='btceur_simple', version='1.0')`
 - **Indicators**:
-  - Bollinger Bands: Period 20, StdDev 2.0
-  - ADX: Period 14 (Regime filter ADX > 25)
-  - EMA: Period 50
+  - `ema_fast`: Period 20 (`ema20`)
+  - `ema_slow`: Period 50 (`ema50`)
+  - `ema_trend`: Period 200 (`ema200`)
+  - `macd`: Fast 12, Slow 26, Signal 9 (`macd_hist`)
+  - `atr`: Period 14
 - **Entry Rules**:
-  - **BUY**: ADX > 25, price pulls back into EMA50 in an upward Bollinger Expansion.
-  - **SELL**: ADX > 25, price pulls back into EMA50 in a downward Bollinger Expansion.
+  - **BUY**: `ema20 > ema50` AND `Close > ema200` AND `macd_hist > 0` AND `EMA separation >= 0.5%` AND `ATR > Mean ATR * 0.8` AND `Overextension (3 candles) <= 2.5%`.
+  - **SELL**: `ema20 < ema50` AND `Close < ema200` AND `macd_hist < 0` AND `EMA separation >= 0.5%` AND `ATR > Mean ATR * 0.8` AND `Overextension (3 candles) <= 2.5%`.
 - **Exit Rules**:
-  - Stop Loss: Low/High of setup candle or `2.0 * ATR`.
-  - Partial Take Profit: 50% closed at 1.5R, remainder trailed to opposite Bollinger Band.
+  - **Stop Loss**: `2.0 * ATR14`
+  - **Take Profit**: `3.0 * ATR14` (Risk:Reward ratio 1:1.5)
+  - **Expiry**: 90 minutes
