@@ -1,0 +1,246 @@
+{
+  "EURUSD": {
+    "strategy": "eurusd_partial",
+    "fallback_strategy": "eurusd_simple",
+    "enabled": true,
+    "risk_per_trade": 0.75,
+    "max_daily_trades": 4,
+    "min_rr_ratio": 1.5,
+    "min_score": 0.60,
+    "expires_minutes": 90,
+    "active_sessions": ["london", "newyork", "overlap"],
+    "avoid_news": true,
+    "description": "eurusd_partial — partial_close validado (Exit Research jul 2026, run 20260702_225143). PF=1.85, WR=54.1%, MC Ruin=0.0%, Stability=51.73",
+    "philosophy": "Momentum + Tendencia + Partial Close validado",
+    "timeframes": ["H1"],
+    "priority": "HIGH",
+    "use_fallback": true,
+    "use_emergency_fallback": true,
+    "simplified_system": true,
+    "cooldown_bars": 10,
+    "sl_atr_multiplier": 1.5,
+    "tp_atr_multiplier": 5.0,
+    "partial_close_enabled": true,
+    "partial_close_atr_mult": 2.0,
+    "trailing_atr_mult": 1.5,
+    "exit_research_run": "20260702_225143",
+    "validation_run": "val_20260703_160132",
+    "confidence_thresholds": {
+      "medium": 0.60,
+      "high": 0.75,
+      "very_high": 0.85
+    }
+  },
+
+  "XAUUSD": {
+    "strategy": "xauusd_partial", 
+    "fallback_strategy": "xauusd_advanced",
+    "enabled": true,
+    "risk_per_trade": 0.6,
+    "max_daily_trades": 3,
+    "min_rr_ratio": 2.0,
+    "min_score": 0.55,
+    "expires_minutes": 45,
+    "active_sessions": ["london", "newyork", "overlap"],
+    "avoid_news": true,
+    "psychological_levels": [1900, 1950, 2000, 2050, 2100, 2150],
+    "description": "SIMPLIFICADO: Nivel psicológico ±10$ + Mecha >30% + Liquidez",
+    "philosophy": "Fakeouts + Rejection + Liquidez",
+    "timeframes": ["H1", "H4"],
+    "priority": "HIGH",
+    "use_fallback": true,
+    "use_emergency_fallback": true,
+    "simplified_system": true,
+    "cooldown_bars": 8,
+    "confidence_thresholds": {
+      "medium": 0.55,
+      "high": 0.70,
+      "very_high": 0.80
+    }
+  },
+
+  "BTCEUR": {
+    "strategy": "btceur_partial",
+    "fallback_strategy": "btc_trend_pullback_v1",
+    "enabled": true,
+    "risk_per_trade": 0.5,
+    "max_daily_trades": 5,
+    "min_rr_ratio": 1.5,
+    "min_score": 0.55,
+    "expires_minutes": 60,
+    "active_sessions": ["all"],
+    "avoid_news": false,
+    "description": "SIMPLIFICADO: EMA12/26 momentum + EMA50 filtro + ATR expansión",
+    "philosophy": "Momentum + Tendencia + Expansión",
+    "timeframes": ["H1", "H4"],
+    "priority": "MEDIUM",
+    "use_fallback": true,
+    "use_emergency_fallback": true,
+    "simplified_system": true,
+    "cooldown_bars": 6,
+    "confidence_thresholds": {
+      "medium": 0.55,
+      "high": 0.72,
+      "very_high": 0.85
+    }
+  },
+
+  "GBPUSD": {
+    "strategy": "breakout_confirmation",
+    "enabled": false,
+    "risk_per_trade": 0.7,
+    "max_daily_trades": 2,
+    "min_rr_ratio": 2.2,
+    "description": "Deshabilitado - Enfoque en 3 pares principales",
+    "priority": "LOW"
+  },
+
+  "USDJPY": {
+    "strategy": "scalping_ema", 
+    "enabled": false,
+    "risk_per_trade": 0.5,
+    "max_daily_trades": 2,
+    "min_rr_ratio": 1.8,
+    "description": "Deshabilitado - Enfoque en 3 pares principales",
+    "priority": "LOW"
+  },
+
+  "GLOBAL_SETTINGS": {
+    "simplified_system": true,
+    "philosophy": "Sistema de scoring flexible - No AND estricto",
+    "max_total_risk": 2.5,
+    "max_daily_trades_all": 12,
+    "max_simultaneous_positions": 3,
+    "drawdown_limit": 15.0,
+    "profit_target_daily": 3.0,
+    "loss_limit_daily": 2.0,
+    "correlation_limit": 0.4,
+    "news_blackout_minutes": 30,
+    
+    "scoring_system": {
+      "enabled": true,
+      "default_min_score": 0.66,
+      "setup_weight": 0.5,
+      "confirmations_weight": 0.5,
+      "description": "Setup obligatorio + mínimo 1 confirmación válida"
+    },
+    
+    "frequency_control": {
+      "realistic_targets": true,
+      "expected_signals_per_day": "8-12 total",
+      "distribution": {
+        "EURUSD": "3-4 señales/día",
+        "XAUUSD": "2-3 señales/día", 
+        "BTCEUR": "3-5 señales/día"
+      }
+    },
+    
+    "market_logic": {
+      "EURUSD": "Breakout + pullback + sesión",
+      "XAUUSD": "Fakeouts + rejection + liquidez",
+      "BTCEUR": "Momentum + tendencia + expansión"
+    },
+    
+    "session_definitions": {
+      "tokyo": {"start": 0, "end": 9, "description": "Sesión Asiática"},
+      "london": {"start": 8, "end": 17, "description": "Sesión Europea"},
+      "newyork": {"start": 13, "end": 22, "description": "Sesión Americana"},
+      "overlap": {"start": 13, "end": 17, "description": "Overlap Londres-NY (Mejor liquidez)"},
+      "all": {"start": 0, "end": 24, "description": "24 horas (Crypto)"}
+    },
+    
+    "high_impact_news_pairs": ["EURUSD", "XAUUSD"],
+    
+    "risk_scaling": {
+      "winning_streak_3": 1.4,
+      "winning_streak_5": 1.8,
+      "winning_streak_7": 2.0,
+      "losing_streak_2": 0.8,
+      "losing_streak_3": 0.5,
+      "losing_streak_4": 0.3
+    },
+    
+    "demo_mode_settings": {
+      "aggressive_risk": true,
+      "max_risk_per_trade": 2.5,
+      "experimental_strategies": true,
+      "high_frequency_trading": false,
+      "extended_hours": true,
+      "use_fallback_strategies": true,
+      "emergency_fallback_enabled": true
+    },
+    
+    "signal_quality_thresholds": {
+      "HIGH": 0.8,
+      "MEDIUM": 0.6,
+      "LOW": 0.4
+    },
+    
+    "auto_optimization": {
+      "enabled": true,
+      "review_period_days": 7,
+      "min_trades_for_review": 20,
+      "performance_threshold": 0.6
+    },
+    
+    "notification_settings": {
+      "signal_confidence_filter": "MEDIUM",
+      "include_charts": true,
+      "include_risk_info": true,
+      "include_market_context": true
+    },
+    
+    "advanced_filters": {
+      "enabled": true,
+      "min_confirmations": 2,
+      "use_confluence_system": true,
+      "use_session_filters": false,
+      "use_drawdown_protection": true,
+      "use_correlation_filters": true,
+      "use_volatility_filters": false,
+      "initial_balance": 5000.0,
+      "max_positions_per_symbol": 2
+    },
+    
+    "multi_timeframe": {
+      "enabled": true,
+      "use_m15_precision": true,
+      "use_m15_validation": true,
+      "precision_timeout_minutes": 15
+    },
+    
+    "trailing_stops": {
+      "enabled": true,
+      "breakeven_at_profit_pct": 50,
+      "trailing_start_pct": 75,
+      "partial_close_pct": 100,
+      "partial_close_amount": 50,
+      "update_interval_seconds": 30,
+      "trailing_distances": {
+        "EURUSD": 150,
+        "XAUUSD": 500,
+        "BTCEUR": 5000
+      }
+    },
+    
+    "market_opening_alerts": {
+      "enabled": true,
+      "pre_market_minutes": 30,
+      "opening_alert_minutes": 15,
+      "post_opening_minutes": 15,
+      "monitored_markets": ["LONDON", "NEWYORK"],
+      "alert_channel": "signals",
+      "include_strategies": true,
+      "include_gap_analysis": true
+    },
+    
+    "risk_engine": {
+      "max_portfolio_risk_pct": 2.0,
+      "minimum_free_margin_pct": 20.0,
+      "allow_auto_reduce_lot": true,
+      "max_simultaneous_positions": 3,
+      "lot_reduction_sequence": [1.0, 0.5, 0.25, 0.12, 0.08, 0.05, 0.03, 0.01]
+    }
+  }
+}
+
