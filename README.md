@@ -1,5 +1,7 @@
 # LastEdge Trading Engine
 
+[![Trading Engine CI](https://github.com/imlast999/lastedge-trading-engine/actions/workflows/ci.yml/badge.svg)](https://github.com/imlast999/lastedge-trading-engine/actions/workflows/ci.yml)
+
 > **Repository:** `lastedge-trading-engine`  
 > **Role:** Production Execution Engine, Risk Engine v2 & MT5 Driver  
 > **Status:** Production Ready  
@@ -92,12 +94,19 @@ python -m services.api_server 8081
 
 ---
 
-## 4. Running Tests
+## 4. Running Tests & Continuous Integration
 
 ```bash
-python -m pytest tests/
+# Run complete test suite locally
+python -m pytest tests/ -v
 ```
 Current test suite status: **69 / 69 passed (100% Green)**.
+
+### CI / Continuous Integration:
+- **Pipeline**: Automated on every push and pull request to `main` via [GitHub Actions](.github/workflows/ci.yml).
+- **Environment**: Multi-Python matrix (3.10, 3.11, 3.12) on `ubuntu-latest`.
+- **Offline & Safe**: Uses mocked MT5 terminal drivers with zero external broker requirements.
+- For complete CI details, see [docs/ci_cd_setup.md](docs/ci_cd_setup.md).
 
 ---
 
@@ -105,6 +114,7 @@ Current test suite status: **69 / 69 passed (100% Green)**.
 
 For detailed guides, refer to the documentation in [`docs/`](docs/):
 
+- 🔄 [**CI/CD Setup**](docs/ci_cd_setup.md): GitHub Actions workflow and local parity.
 - 🏛️ [**Architecture**](docs/ARCHITECTURE.md): Comprehensive module breakdown and data flow.
 - ⚙️ [**Installation**](docs/INSTALLATION.md): Setup, dependencies, and virtual environments.
 - 🔧 [**Configuration**](docs/CONFIGURATION.md): Environment variables, `rules_config.json`, and secrets.
