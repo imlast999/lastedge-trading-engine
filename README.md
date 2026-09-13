@@ -104,9 +104,8 @@ Current test suite status: **69 / 69 passed (100% Green)**.
 
 ### CI / Continuous Integration:
 - **Pipeline**: Automated on every push and pull request to `main` via [GitHub Actions](.github/workflows/ci.yml).
-- **Environment**: Multi-Python matrix (3.10, 3.11, 3.12) on `ubuntu-latest`.
+- **Environment**: Multi-Python matrix (3.10, 3.11, 3.12, 3.13) on Ubuntu and Windows.
 - **Offline & Safe**: Uses mocked MT5 terminal drivers with zero external broker requirements.
-- For complete CI details, see [docs/ci_cd_setup.md](docs/ci_cd_setup.md).
 
 ---
 
@@ -114,16 +113,14 @@ Current test suite status: **69 / 69 passed (100% Green)**.
 
 For detailed guides, refer to the documentation in [`docs/`](docs/):
 
-- 🔄 [**CI/CD Setup**](docs/ci_cd_setup.md): GitHub Actions workflow and local parity.
 - 🏛️ [**Architecture**](docs/ARCHITECTURE.md): Comprehensive module breakdown and data flow.
 - ⚙️ [**Installation**](docs/INSTALLATION.md): Setup, dependencies, and virtual environments.
 - 🔧 [**Configuration**](docs/CONFIGURATION.md): Environment variables, `rules_config.json`, and secrets.
 - ⚡ [**Execution Lifecycle**](docs/EXECUTION.md): Order lifecycle, tick scanning, and signal generation.
 - 🛡️ [**Risk Engine v2**](docs/RISK_ENGINE.md): Position sizing formulas, margin checks, and circuit breakers.
 - 📈 [**Strategies**](docs/STRATEGIES.md): EURUSD, XAUUSD, BTCEUR specifications and parameter tables.
-- 📜 [**Strategy Contract**](docs/STRATEGY_CONTRACT.md): Interface definition for `BaseStrategy` and metadata.
+- 📜 [**Strategy Contract**](docs/STRATEGY_CONTRACT.md): Contract reference to Canonical Strategy Lab and loader.
 - 🔌 [**MetaTrader 5 Driver**](docs/MT5.md): Low-level MT5 connection, error codes, and reconnection.
 - 🌐 [**REST API**](docs/API.md): Endpoint definitions, schemas, and payload examples for port `8081`.
-- 🧪 [**Testing Guide**](docs/TESTING.md): Running unit, integration, and risk test suites.
-- 🚀 [**Deployment & VPS**](docs/DEPLOYMENT.md): Headless VPS setup, process watchdog, and auto-start.
-- 🛠️ [**Operations & Certification**](docs/OPERATIONS.md): Operational readiness, broker certification, and backups.
+- 🛠️ [**Operations & Deployment**](docs/OPERATIONS.md): Operational readiness, broker certification, VPS setup, and backups.
+- 🧪 [**Testing & CI/CD**](docs/TESTING.md): Running unit, integration, and risk test suites, and GitHub Actions.

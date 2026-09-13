@@ -1,40 +1,53 @@
-# LastEdge Trading Engine — Testing Guide
+# LastEdge Trading Engine — Testing & CI/CD Specification
 
 > **Module:** `LastEdge Trading Engine`  
 > **Framework:** `pytest`  
-> **Current Status:** 69 / 69 Passed (100% Green)  
+> **Workflow:** `.github/workflows/ci.yml`  
+> **Test Status:** 69 / 69 Passed (100% Green)  
 
 ---
 
-## 1. Running Test Suites
+## 1. Running Automated Tests
 
 ```powershell
-# Run all Trading Engine tests
+# Run all 69 Trading Engine test suites
 python -m pytest tests/
 
 # Run with verbose output
 python -m pytest tests/ -v
 
-# Run specific test file (e.g. Risk Engine)
+# Run risk engine tests specifically
 python -m pytest tests/test_risk_engine.py -v
+
+# Run operational readiness tests
+python -m pytest tests/test_p56_operational_readiness.py -v
 ```
 
 ---
 
-## 2. Test Coverage Inventory
+## 2. Test Suite Inventory
 
-| Test Module | Tests | Focus Area |
+| Test Module | Tests | Description |
 |---|:---:|---|
-| `tests/test_risk_engine.py` | 34 | Position sizing, margin checks, portfolio limits, circuit breakers |
-| `tests/test_api_server.py` | 1 | REST API endpoints, health check, position closure responses |
-| `tests/test_bot_service.py` | 4 | Bot service facade, account equity, open positions |
-| `tests/test_execution_quality_p11.py`| 5 | Spread tracking, slippage calculation, execution latency |
-| `tests/test_observability_p04.py` | 4 | Telemetry, logging metrics, broker scoring |
-| `tests/test_p51_go_live_checklist.py`| 4 | Pre-flight certification, configuration validation |
-| `tests/test_p52_production_verifier.py`| 2 | Component status verification, subsystem health |
-| `tests/test_p54_broker_certification.py`| 2 | Broker speed, spread bounds, order execution latency |
-| `tests/test_p55_stability_verification.py`| 2 | Reconnection resilience, long-running stability |
-| `tests/test_p56_operational_readiness.py`| 4 | Backup creation, database recovery, audit checks |
-| `tests/test_p57_production_monitoring.py`| 2 | Continuous background monitoring, resource usage |
-| `tests/test_promoted_strategies.py`| 1 | Dynamic loading and contract conformity of promoted strategies |
-| `tests/test_signals_p01_quality.py`| 4 | Signal validation, ATR calculation, EMA cross logic |
+| `tests/test_api_server.py` | 1 | Trading REST API endpoints (:8081) |
+| `tests/test_bot_service.py` | 4 | System status, journal summaries, auto-signals toggles |
+| `tests/test_execution_quality_p11.py` | 5 | Slippage calculation, telemetry, journal migration |
+| `tests/test_observability_p04.py` | 4 | Observability metrics, health monitor reports |
+| `tests/test_p51_go_live_checklist.py` | 4 | Pre-flight checklist and circuit breaker behavior |
+| `tests/test_p52_production_verifier.py` | 2 | End-to-end subsystem verification |
+| `tests/test_p54_broker_certification.py` | 2 | Latency and broker spread certification |
+| `tests/test_p55_stability_verification.py` | 2 | System stability audit |
+| `tests/test_p56_operational_readiness.py` | 4 | Backup/restore cycles, log rotation, database integrity |
+| `tests/test_p57_production_monitoring.py` | 2 | Production monitoring telemetry |
+| `tests/test_promoted_strategies.py` | 1 | Partial strategy registration and loadability |
+| `tests/test_risk_engine.py` | 33 | Position sizing, margin verification, portfolio limits |
+| `tests/test_signals_p01_quality.py` | 5 | Strategy instantiation, signal quality, and indicators |
+| **Total** | **69** | **100% Automated Test Coverage** |
+
+---
+
+## 3. Continuous Integration (`.github/workflows/ci.yml`)
+
+- **Trigger:** Pushes and pull requests to `main`.
+- **Environment:** Ubuntu and Windows runners across Python `3.10`, `3.11`, `3.12`, `3.13`.
+- **Mock Isolation:** Uses mock MT5 drivers to enable 100% test execution in headless CI environments without physical MT5 terminals.
