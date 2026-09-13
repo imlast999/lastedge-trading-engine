@@ -4,7 +4,7 @@
 
 # LastEdge Trading Engine
 
-[![Trading Engine CI](https://github.com/imlast999/lastedge-trading-engine/actions/workflows/ci.yml/badge.svg)](https://github.com/imlast999/lastedge-trading-engine/actions/workflows/ci.yml)
+[![Trading Engine CI](https://github.com/imlast999/lastedge-trading-engine/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/imlast999/lastedge-trading-engine/actions/workflows/ci.yml)
 
 > **Repository:** [`imlast999/lastedge-trading-engine`](https://github.com/imlast999/lastedge-trading-engine)  
 > **Role:** Production Execution Engine, Risk Engine v2, Dynamic Strategy Loader & MT5 Driver  
