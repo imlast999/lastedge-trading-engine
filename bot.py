@@ -14,7 +14,10 @@ signal.signal(signal.SIGINT, signal_handler)
 signal.signal(signal.SIGTERM, signal_handler)
 
 # Parche para compatibilidad con Python 3.13
-import audioop_patch
+try:
+    import services.audioop_patch
+except ImportError:
+    pass
 
 # Configurar matplotlib para evitar problemas de threading
 import matplotlib
@@ -60,12 +63,23 @@ from services import (
     log_signal_evaluation, 
     log_command,
     execution_service,
-    dashboard_service,
-    start_enhanced_dashboard,
-    stop_enhanced_dashboard,
-    add_signal_to_enhanced_dashboard,
-    update_dashboard_stats
 )
+
+# Dashboard desacoplado (operando como servicio independiente en LastEdge App)
+try:
+    from services.dashboard import (
+        dashboard_service,
+        start_enhanced_dashboard,
+        stop_enhanced_dashboard,
+        add_signal_to_enhanced_dashboard,
+        update_dashboard_stats
+    )
+except ImportError:
+    dashboard_service = None
+    start_enhanced_dashboard = lambda *args, **kwargs: None
+    stop_enhanced_dashboard = lambda *args, **kwargs: None
+    add_signal_to_enhanced_dashboard = lambda *args, **kwargs: None
+    update_dashboard_stats = lambda *args, **kwargs: None
 
 # Import intelligent logger to access current_log_file
 from services.logging import get_intelligent_logger
@@ -77,7 +91,10 @@ from services.signals import _detect_signal_wrapper, detect_signal, detect_signa
 from services.mt5_client import initialize as mt5_initialize, get_candles, shutdown as mt5_shutdown, login as mt5_login, place_order
 from services.charts import generate_chart
 from secrets_store import save_credentials, load_credentials, clear_credentials
-from services.backtest_tracker import backtest_tracker
+try:
+    from services.backtest_tracker import backtest_tracker
+except ImportError:
+    backtest_tracker = None
 import MetaTrader5 as mt5
 from services.position_manager import list_positions, close_position
 
@@ -1278,8 +1295,16 @@ async def _find_signals_channel():
 
 if __name__ == '__main__':
     if not DISCORD_TOKEN:
-        logger.error("DISCORD_TOKEN no encontrado en el entorno. Añade .env con DISCORD_TOKEN=")
-        raise SystemExit("DISCORD_TOKEN missing")
+        print("\n" + "=" * 65)
+        print("🤖 LastEdge Trading Bot (Discord Adapter)")
+        print("=" * 65)
+        print("⚠️ AVISO: DISCORD_TOKEN no está configurado en 'LastEdge Trading Engine/.env'.")
+        print("ℹ️ Para iniciar el bot de Discord con comandos interactivos y alertas:")
+        print("   1. Abre 'LastEdge Trading Engine/.env'")
+        print("   2. Configura tu token: DISCORD_TOKEN=tu_bot_token")
+        print("   3. Vuelve a ejecutar: python bot.py")
+        print("=" * 65 + "\n")
+        sys.exit(0)
 
     if os.name == 'nt':
         import ctypes
