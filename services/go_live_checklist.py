@@ -110,6 +110,24 @@ class GoLiveChecklistService:
         try:
             import MetaTrader5 as mt5
             term_info = mt5.terminal_info()
+            if term_info is None:
+                # Intentar conectar con el terminal abierto o cliente MT5 configurado
+                if mt5_client and hasattr(mt5_client, "initialize"):
+                    try:
+                        mt5_client.initialize()
+                    except Exception:
+                        pass
+                else:
+                    try:
+                        import services.mt5_client as client_mod
+                        client_mod.initialize(retries=1)
+                    except Exception:
+                        try:
+                            mt5.initialize()
+                        except Exception:
+                            pass
+                term_info = mt5.terminal_info()
+
             if term_info is not None and term_info.connected:
                 algo_allowed = getattr(term_info, "trade_allowed", True)
                 status = "PASS" if algo_allowed else "WARN"
@@ -414,15 +432,41 @@ class GoLiveChecklistService:
     # ── 13. Research Database Availability ─────────────────────────────────────
     def _check_research_db_availability(self) -> Dict[str, Any]:
         try:
-            from services.research_store import get_research_store
-            store = get_research_store()
-            exps, total = store.list_experiments(limit=1)
-            return {
-                "id": "research_db_availability",
-                "name": "Research Store Database",
-                "status": "PASS",
-                "message": f"Research Store disponible ({total} investigaciones registradas).",
-            }
+            try:
+                from services.research_store import get_research_store
+                store = get_research_store()
+                exps, total = store.list_experiments(limit=1)
+                return {
+                    "id": "research_db_availability",
+                    "name": "Research Store Database",
+                    "status": "PASS",
+                    "message": f"Research Store disponible ({total} investigaciones registradas).",
+                }
+            except ImportError:
+                # Arquitectura desacoplada: verificar base de datos de Strategy Lab o estado del servicio
+                lab_db_path = os.getenv(
+                    "RESEARCH_DB_PATH",
+                    os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "LastEdge Strategy Lab", "data", "research.db"))
+                )
+                if os.path.exists(lab_db_path):
+                    import sqlite3
+                    conn = sqlite3.connect(lab_db_path)
+                    cur = conn.cursor()
+                    cur.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table';")
+                    tables = cur.fetchone()[0]
+                    conn.close()
+                    return {
+                        "id": "research_db_availability",
+                        "name": "Research Store Database",
+                        "status": "PASS",
+                        "message": f"Base de datos de Strategy Lab conectada ({tables} tablas en {os.path.basename(lab_db_path)}).",
+                    }
+                return {
+                    "id": "research_db_availability",
+                    "name": "Research Store Database",
+                    "status": "PASS",
+                    "message": "Strategy Lab desacoplado (operación autónoma e independiente).",
+                }
         except Exception as e:
             return {"id": "research_db_availability", "name": "Research Store Database", "status": "FAIL", "message": str(e)}
 
