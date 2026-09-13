@@ -197,6 +197,31 @@ def detect_signal(
         # Obtener estrategia del registry
         strategy_name = (strategy or 'ema50_200').lower()
         strategy_factory = STRATEGY_REGISTRY.get(strategy_name)
+
+        # Si no está en signals.STRATEGY_REGISTRY, consultar dinámicamente en strategies.STRATEGY_REGISTRY
+        if strategy_factory is None:
+            try:
+                import strategies as _strategies_pkg
+                pkg_reg = getattr(_strategies_pkg, 'STRATEGY_REGISTRY', {})
+                strat_target = None
+                for k, v in pkg_reg.items():
+                    if k.lower() == strategy_name:
+                        strat_target = v
+                        break
+                if strat_target is None:
+                    strat_target = pkg_reg.get(strategy_name.upper())
+
+                if strat_target is not None:
+                    if isinstance(strat_target, type):
+                        strategy_factory = lambda c=strat_target: c()
+                    elif callable(strat_target):
+                        strategy_factory = strat_target
+                    else:
+                        strategy_factory = lambda obj=strat_target: obj
+                    # Registrar en cache de signals.STRATEGY_REGISTRY
+                    STRATEGY_REGISTRY[strategy_name] = strategy_factory
+            except Exception as _lookup_err:
+                logger.debug(f"Error resolviendo estrategia {strategy_name} en strategies pkg: {_lookup_err}")
         
         # PROTECCIÓN: si no hay factory registrada
         if strategy_factory is None:
@@ -350,14 +375,34 @@ def get_available_strategies() -> Dict[str, str]:
 
 def register_strategy(name: str, strategy_factory):
     """
-    Registra una nueva estrategia
+    Registra una nueva estrategia de forma unificada en services.signals y strategies.
     
     Args:
-        name: Nombre de la estrategia
-        strategy_factory: Factory function que retorna instancia de estrategia
+        name: Nombre de la estrategia o alias
+        strategy_factory: Factory function que retorna instancia, o clase de estrategia
     """
-    STRATEGY_REGISTRY[name.lower()] = strategy_factory
-    logger.info(f"Estrategia {name} registrada exitosamente")
+    name_clean = name.lower()
+    if isinstance(strategy_factory, type):
+        factory = lambda c=strategy_factory: c()
+        strat_cls = strategy_factory
+    elif callable(strategy_factory):
+        factory = strategy_factory
+        strat_cls = strategy_factory
+    else:
+        factory = lambda obj=strategy_factory: obj
+        strat_cls = strategy_factory
+
+    STRATEGY_REGISTRY[name_clean] = factory
+
+    # Sincronizar también con strategies.STRATEGY_REGISTRY
+    try:
+        import strategies as _strategies_pkg
+        _strategies_pkg.STRATEGY_REGISTRY[name_clean] = strat_cls
+        _strategies_pkg.STRATEGY_REGISTRY[name.upper()] = strat_cls
+    except Exception as _sync_err:
+        logger.debug("No se pudo sincronizar strategies.STRATEGY_REGISTRY: %s", _sync_err)
+
+    logger.info(f"Estrategia {name} registrada exitosamente en registry unificado")
 
 # Funciones de compatibilidad con el código existente
 def _detect_signal_wrapper(df: pd.DataFrame, symbol: str = None):

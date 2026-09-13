@@ -1,18 +1,25 @@
 """
-Base Strategy Class - Clase base para todas las estrategias
+Base Strategy Class & Signal Contract - Contrato base unificado para estrategias LastEdge
 
-Define la interfaz común que deben implementar todas las estrategias específicas.
-Cada estrategia se enfoca SOLO en detectar oportunidades de mercado.
+Define la interfaz común que deben implementar todas las estrategias específicas,
+así como el contrato formal de señales (SignalIntent) y metadatos (StrategyMetadata).
+Cada estrategia se enfoca SOLO en detectar oportunidades de mercado y calcular niveles técnicos.
 """
 
 from abc import ABC, abstractmethod
-from typing import Dict, Optional, Tuple
+from dataclasses import dataclass, field
+from typing import Dict, Optional, Tuple, Any, List, Union
 import pandas as pd
 import numpy as np
 from datetime import datetime, timezone, timedelta
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+# ============================================================================
+# 1. METADATOS DE ESTRATEGIA (StrategyMetadata)
+# ============================================================================
 
 class StrategyMetadata:
     """
@@ -95,6 +102,205 @@ def resolve_required_history(strategy: Optional[object] = None, fallback_require
     return resolve_strategy_metadata(strategy, fallback_required_history=fallback_required_history).required_history
 
 
+# ============================================================================
+# 2. CONTRATO DE SEÑAL TIPADO (SignalIntent)
+# ============================================================================
+
+@dataclass
+class SignalIntent:
+    """
+    Representación formal, tipada e inmutable de la intención de señal de trading emitida por una estrategia.
+
+    Responsabilidad de la Estrategia:
+    - Define exclusivamente setup, dirección y niveles técnicos de precio (entry, sl, tp).
+    - NO define tamaño de lote, apalancamiento, margen ni ejecución en broker.
+
+    Campos obligatorios:
+    -------------------
+    type : str
+        Dirección de la orden: 'BUY' o 'SELL'.
+    entry : float
+        Precio técnico sugerido de entrada.
+    sl : float
+        Nivel de Stop Loss técnico.
+    tp : float
+        Nivel de Take Profit técnico.
+
+    Campos opcionales con valores por defecto:
+    -----------------------------------------
+    symbol : str
+        Símbolo del instrumento (e.g. 'EURUSD', 'XAUUSD'). Default: 'UNKNOWN'.
+    timeframe : str
+        Timeframe de la señal (e.g. 'H1'). Default: 'H1'.
+    setup_strength : float
+        Fuerza técnica relativa del setup (0.0 a 1.0). Default: 1.0.
+    explanation : str
+        Resumen legible de las condiciones y motivos de la señal.
+    expires : Optional[datetime]
+        Timestamp UTC en el que la señal caduca si no ha sido ejecutada.
+    context : Dict[str, Any]
+        Metadatos adicionales (indicadores, confirmaciones, estado de mercado).
+    created_at : datetime
+        Timestamp UTC de emisión de la señal.
+    """
+    type: str
+    entry: float
+    sl: float
+    tp: float
+    symbol: str = "UNKNOWN"
+    timeframe: str = "H1"
+    setup_strength: float = 1.0
+    explanation: str = ""
+    expires: Optional[datetime] = None
+    context: Dict[str, Any] = field(default_factory=dict)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+
+    def __post_init__(self) -> None:
+        self.type = str(self.type).upper().strip()
+        if self.type not in ("BUY", "SELL"):
+            raise ValueError(f"SignalIntent.type inválido: {self.type!r}. Debe ser 'BUY' o 'SELL'.")
+        self.entry = float(self.entry)
+        self.sl = float(self.sl)
+        self.tp = float(self.tp)
+        self.setup_strength = float(self.setup_strength)
+        if self.entry <= 0:
+            raise ValueError(f"SignalIntent.entry debe ser positivo: {self.entry}")
+        if self.sl <= 0:
+            raise ValueError(f"SignalIntent.sl debe ser positivo: {self.sl}")
+        if self.tp <= 0:
+            raise ValueError(f"SignalIntent.tp debe ser positivo: {self.tp}")
+
+    @property
+    def is_buy(self) -> bool:
+        """Indica si la señal es de compra."""
+        return self.type == "BUY"
+
+    @property
+    def is_sell(self) -> bool:
+        """Indica si la señal es de venta."""
+        return self.type == "SELL"
+
+    def validate(self) -> Tuple[bool, List[str]]:
+        """
+        Valida la coherencia técnica de los niveles de precios según la dirección.
+        Retorna (is_valid, list_of_errors).
+        """
+        errors = []
+        if self.type == "BUY":
+            if self.sl >= self.entry:
+                errors.append(f"BUY inválido: SL ({self.sl}) >= Entry ({self.entry})")
+            if self.tp <= self.entry:
+                errors.append(f"BUY inválido: TP ({self.tp}) <= Entry ({self.entry})")
+        elif self.type == "SELL":
+            if self.sl <= self.entry:
+                errors.append(f"SELL inválido: SL ({self.sl}) <= Entry ({self.entry})")
+            if self.tp >= self.entry:
+                errors.append(f"SELL inválido: TP ({self.tp}) >= Entry ({self.entry})")
+        if not (0.0 <= self.setup_strength <= 1.0):
+            errors.append(f"setup_strength fuera del rango [0.0, 1.0]: {self.setup_strength}")
+        return (len(errors) == 0, errors)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """
+        Convierte la instancia a un diccionario plano con el esquema tradicional
+        consumido por el Trading Engine, ReplayEngine y servicios de logging.
+        """
+        res: Dict[str, Any] = {
+            "type": self.type,
+            "entry": self.entry,
+            "sl": self.sl,
+            "tp": self.tp,
+            "symbol": self.symbol,
+            "timeframe": self.timeframe,
+            "setup_strength": self.setup_strength,
+            "explanation": self.explanation,
+            "context": dict(self.context),
+            "created_at": self.created_at,
+        }
+        if self.expires is not None:
+            res["expires"] = self.expires
+        return res
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "SignalIntent":
+        """
+        Construye una instancia validada de SignalIntent a partir de un dict existente.
+        Soporta nombres de claves alternativos (direction/type, price/entry, stop_loss/sl, take_profit/tp).
+        """
+        if not isinstance(data, dict):
+            raise TypeError(f"Se esperaba dict, recibido {type(data).__name__}")
+
+        sig_type = data.get("type") or data.get("direction")
+        if not sig_type:
+            raise KeyError("El dict no contiene 'type' ni 'direction'")
+
+        entry = data.get("entry") if "entry" in data else data.get("price")
+        if entry is None:
+            raise KeyError("El dict no contiene 'entry' ni 'price'")
+
+        sl = data.get("sl") if "sl" in data else data.get("stop_loss")
+        if sl is None:
+            raise KeyError("El dict no contiene 'sl' ni 'stop_loss'")
+
+        tp = data.get("tp") if "tp" in data else data.get("take_profit")
+        if tp is None:
+            raise KeyError("El dict no contiene 'tp' ni 'take_profit'")
+
+        expires = data.get("expires")
+        if isinstance(expires, str):
+            try:
+                expires = datetime.fromisoformat(expires)
+            except Exception:
+                expires = None
+
+        created_at = data.get("created_at")
+        if isinstance(created_at, str):
+            try:
+                created_at = datetime.fromisoformat(created_at)
+            except Exception:
+                created_at = datetime.now(timezone.utc)
+        elif not isinstance(created_at, datetime):
+            created_at = datetime.now(timezone.utc)
+
+        return cls(
+            type=str(sig_type),
+            entry=float(entry),
+            sl=float(sl),
+            tp=float(tp),
+            symbol=str(data.get("symbol", "UNKNOWN")),
+            timeframe=str(data.get("timeframe", "H1")),
+            setup_strength=float(data.get("setup_strength", 1.0)),
+            explanation=str(data.get("explanation", "")),
+            expires=expires,
+            context=dict(data.get("context", {})),
+            created_at=created_at,
+        )
+
+    # ── Métodos de acceso estilo mapping para máxima retrocompatibilidad ──────
+    def __getitem__(self, key: str) -> Any:
+        """Permite acceso estilo dict signal['type'] para compatibilidad transparente."""
+        if hasattr(self, key):
+            return getattr(self, key)
+        if key in self.context:
+            return self.context[key]
+        raise KeyError(f"Clave {key!r} no encontrada en SignalIntent")
+
+    def get(self, key: str, default: Any = None) -> Any:
+        """Permite acceso estilo dict signal.get('type') para compatibilidad transparente."""
+        try:
+            return self[key]
+        except KeyError:
+            return default
+
+    def __contains__(self, key: str) -> bool:
+        """Permite verificación 'type' in signal."""
+        return hasattr(self, key) or (key in self.context)
+
+
+# ============================================================================
+# 3. CLASE BASE DE ESTRATEGIAS (BaseStrategy)
+# ============================================================================
+
 class BaseStrategy(ABC):
     """
     Clase base para estrategias de trading.
@@ -102,13 +308,13 @@ class BaseStrategy(ABC):
     Responsabilidades:
     - Detectar setups de mercado
     - Calcular niveles (entry, SL, TP)
-    - Retornar contexto para scoring
+    - Retornar contexto para scoring (SignalIntent o dict)
     - Publicar metadatos (required_history, symbol, timeframe)
     
     NO responsabilidades:
     - Gestión de confianza
     - Logging de señales
-    - Gestión de riesgo
+    - Gestión de riesgo / lotaje
     - Decisiones de ejecución
     """
     
@@ -158,7 +364,7 @@ class BaseStrategy(ABC):
         pass
     
     @abstractmethod
-    def detect_setup(self, df: pd.DataFrame, config: Dict = None) -> Optional[Dict]:
+    def detect_setup(self, df: pd.DataFrame, config: Dict = None) -> Optional[Union[Dict, SignalIntent]]:
         """
         Detecta setup de trading en los datos.
         
@@ -167,9 +373,9 @@ class BaseStrategy(ABC):
             config: Configuración específica (opcional)
             
         Returns:
-            Dict con señal o None si no hay setup
+            SignalIntent o Dict con señal, o None si no hay setup.
             
-        Formato de retorno:
+        Formato de retorno esperado (o instancia de SignalIntent):
         {
             'type': 'BUY' | 'SELL',
             'entry': float,
@@ -182,6 +388,22 @@ class BaseStrategy(ABC):
         }
         """
         pass
+
+    # ── Helpers de compatibilidad de señales ───────────────────────────────────
+
+    @staticmethod
+    def ensure_signal_dict(signal: Optional[Union[Dict, SignalIntent]]) -> Optional[Dict]:
+        """Convierte SignalIntent a dict si es necesario, preservando None."""
+        if signal is None:
+            return None
+        return signal.to_dict() if isinstance(signal, SignalIntent) else signal
+
+    @staticmethod
+    def ensure_signal_intent(signal: Optional[Union[Dict, SignalIntent]]) -> Optional[SignalIntent]:
+        """Convierte dict a SignalIntent si es necesario, preservando None."""
+        if signal is None:
+            return None
+        return signal if isinstance(signal, SignalIntent) else SignalIntent.from_dict(signal)
     
     def add_indicators(self, df: pd.DataFrame, config: Dict = None) -> pd.DataFrame:
         """
@@ -267,7 +489,6 @@ class BaseStrategy(ABC):
             logger.warning(f"Error calculando tamaño de posición: {e}")
             return {'lot_size': 0.01, 'risk_amount': 0, 'sl_pips': 0, 'pip_value': 0}
 
-    
     def evaluate_signal(self, df: pd.DataFrame, config: Dict = None) -> Optional[Dict]:
         """
         Evalúa señal completa con indicadores y setup.
@@ -278,14 +499,14 @@ class BaseStrategy(ABC):
             config: Configuración específica (opcional)
             
         Returns:
-            Dict con resultado de evaluación o None si no hay señal
+            Dict con resultado de evaluación o None si no hay señal.
             
         Formato de retorno:
         {
             'signal_found': bool,
-            'signal': Dict,  # Señal detectada
-            'confidence': str,  # Nivel de confianza estimado
-            'score': float  # Score numérico (0-1)
+            'signal': Dict | SignalIntent,  # Señal detectada
+            'confidence': str,              # Nivel de confianza estimado
+            'score': float                  # Score numérico (0-1)
         }
         """
         try:
@@ -302,8 +523,10 @@ class BaseStrategy(ABC):
             if not signal:
                 return None
             
+            signal_dict = signal.to_dict() if isinstance(signal, SignalIntent) else signal
+            
             # Calcular confianza básica basada en setup_strength
-            setup_strength = signal.get('setup_strength', 0.5)
+            setup_strength = signal_dict.get('setup_strength', 0.5)
             
             if setup_strength >= 0.8:
                 confidence = 'HIGH'
@@ -316,7 +539,7 @@ class BaseStrategy(ABC):
             
             return {
                 'signal_found': True,
-                'signal': signal,
+                'signal': signal_dict,
                 'confidence': confidence,
                 'score': setup_strength
             }

@@ -47,6 +47,14 @@ if XAUUSD_GSRS_AVAILABLE:
 if BTCEUR_AVAILABLE:
     STRATEGY_REGISTRY['BTCEUR'] = BTCEURPartialStrategy
 
+# Ingestión automática de paquetes promovidos desde Strategy Lab (.py + .json verificados)
+try:
+    from services.strategy_loader import register_promoted_strategies
+    register_promoted_strategies(STRATEGY_REGISTRY)
+except Exception as _loader_err:
+    logger.debug("StrategyLoader auto-discovery deferred/skipped: %s", _loader_err)
+
+
 def get_strategy(symbol: str):
     """
     Get strategy instance for a given symbol
@@ -58,7 +66,12 @@ def get_strategy(symbol: str):
         Strategy instance or None if not found
     """
     symbol_upper = symbol.upper()
-    strategy_class = STRATEGY_REGISTRY.get(symbol_upper)
+    symbol_lower = symbol.lower()
+    strategy_class = (
+        STRATEGY_REGISTRY.get(symbol_upper) or
+        STRATEGY_REGISTRY.get(symbol_lower) or
+        STRATEGY_REGISTRY.get(symbol)
+    )
 
     # Estrategia registrada correctamente
     if strategy_class:
@@ -88,7 +101,9 @@ def get_available_symbols():
 
 def register_strategy(symbol: str, strategy_class):
     """Register a new strategy for a symbol"""
+    STRATEGY_REGISTRY[symbol] = strategy_class
     STRATEGY_REGISTRY[symbol.upper()] = strategy_class
+    STRATEGY_REGISTRY[symbol.lower()] = strategy_class
 
 __all__ = [
     'BaseStrategy',
