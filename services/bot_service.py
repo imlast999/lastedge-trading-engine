@@ -332,9 +332,12 @@ class BotService:
             from services.execution_analytics import get_execution_analytics_service
             analytics = get_execution_analytics_service().get_execution_metrics(days=7)
 
+            mt5_connected = bool(report.get("mt5", {}).get("connected", False))
+
             return {
                 "ok": True,
                 "overall_status": report.get("status", "HEALTHY"),
+                "mt5_connected": mt5_connected,
                 "mt5": report.get("mt5", {}),
                 "database": report.get("database", {}),
                 "process": report.get("process", {}),

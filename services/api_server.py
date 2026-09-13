@@ -57,13 +57,19 @@ class TradingAPIHandler(BaseHTTPRequestHandler):
             # ── Root Index & Discovery ─────────────────────────────────────────
             if path in ("", "/", "/api"):
                 from services.bot_service import get_bot_service
-                health = get_bot_service().get_health_status()
+                bot_svc = get_bot_service()
+                health = bot_svc.get_health_status()
+                mt5_conn = bool(
+                    health.get("mt5_connected") or
+                    (isinstance(health.get("mt5"), dict) and health.get("mt5", {}).get("connected")) or
+                    bot_svc.get_system_status().get("mt5_connected")
+                )
                 self._send_json(200, {
                     "ok": True,
                     "service": "LastEdge Trading Engine",
                     "version": "1.0.0",
                     "status": "ONLINE",
-                    "mt5_connected": health.get("mt5_connected", False),
+                    "mt5_connected": mt5_conn,
                     "endpoints": {
                         "health": "/api/health",
                         "status": "/api/trading/status",
@@ -89,12 +95,17 @@ class TradingAPIHandler(BaseHTTPRequestHandler):
                 bot_svc = get_bot_service()
                 health = bot_svc.get_health_status()
                 uptime = bot_svc.get_uptime_formatted()
+                mt5_conn = bool(
+                    health.get("mt5_connected") or
+                    (isinstance(health.get("mt5"), dict) and health.get("mt5", {}).get("connected")) or
+                    bot_svc.get_system_status().get("mt5_connected")
+                )
                 self._send_json(200, {
                     "ok": True,
                     "service": "LastEdge Trading Engine",
                     "status": "ONLINE",
                     "uptime": uptime,
-                    "mt5_connected": health.get("mt5_connected", False),
+                    "mt5_connected": mt5_conn,
                     "health": health,
                     "timestamp": datetime.now(timezone.utc).isoformat()
                 })
