@@ -1,3 +1,7 @@
+<div align="center">
+
+<img src="branding/LastEdge_Banner.png" alt="LastEdge Trading Engine Banner" width="100%">
+
 # LastEdge Trading Engine
 
 [![Trading Engine CI](https://github.com/imlast999/lastedge-trading-engine/actions/workflows/ci.yml/badge.svg)](https://github.com/imlast999/lastedge-trading-engine/actions/workflows/ci.yml)
@@ -6,6 +10,8 @@
 > **Role:** Production Execution Engine, Risk Engine v2, Dynamic Strategy Loader & MT5 Driver  
 > **Status:** Production Ready  
 > **Tests:** 89 / 89 Passed (100% Green)  
+
+</div>
 
 ---
 
