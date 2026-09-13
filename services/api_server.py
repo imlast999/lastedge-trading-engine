@@ -54,8 +54,32 @@ class TradingAPIHandler(BaseHTTPRequestHandler):
         path = self.path.split("?")[0].rstrip("/")
 
         try:
+            # ── Root Index & Discovery ─────────────────────────────────────────
+            if path in ("", "/", "/api"):
+                from services.bot_service import get_bot_service
+                health = get_bot_service().get_health_status()
+                self._send_json(200, {
+                    "ok": True,
+                    "service": "LastEdge Trading Engine",
+                    "version": "1.0.0",
+                    "status": "ONLINE",
+                    "mt5_connected": health.get("mt5_connected", False),
+                    "endpoints": {
+                        "health": "/api/health",
+                        "status": "/api/trading/status",
+                        "positions": "/api/trading/positions",
+                        "risk": "/api/trading/risk",
+                        "equity": "/api/trading/equity",
+                        "signals": "/api/trading/signals",
+                        "news": "/api/trading/news",
+                        "journal": "/api/trading/journal",
+                        "checklist": "/api/trading/checklist"
+                    },
+                    "timestamp": datetime.now(timezone.utc).isoformat()
+                })
+
             # ── Health & Status ───────────────────────────────────────────────
-            if path in ("/api/trading/health", "/api/health", "/health"):
+            elif path in ("/api/trading/health", "/api/health", "/health"):
                 from services.bot_service import get_bot_service
                 health = get_bot_service().get_health_status()
                 self._send_json(200, {"ok": True, "service": "LastEdge Trading Engine", "health": health})
