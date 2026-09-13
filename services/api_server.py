@@ -87,6 +87,11 @@ class TradingAPIHandler(BaseHTTPRequestHandler):
                 positions = get_bot_service().get_open_positions()
                 self._send_json(200, {"ok": True, "positions": positions, "count": len(positions)})
 
+            elif path in ("/api/trading/risk", "/api/risk"):
+                from services.bot_service import get_bot_service
+                risk = get_bot_service().get_risk_telemetry()
+                self._send_json(200, risk)
+
             elif path in ("/api/trading/equity", "/api/equity"):
                 from services.bot_service import get_bot_service
                 eq = get_bot_service().get_account_equity()
@@ -107,11 +112,47 @@ class TradingAPIHandler(BaseHTTPRequestHandler):
                 result = get_bot_service().run_go_live_checklist()
                 self._send_json(200, {"ok": True, "checklist": result})
 
+            elif path in ("/api/trading/news", "/api/news"):
+                from services.bot_service import get_bot_service
+                news = get_bot_service().get_upcoming_news()
+                self._send_json(200, {"ok": True, "news": news})
+
+            elif path in ("/api/trading/journal", "/api/journal"):
+                from services.bot_service import get_bot_service
+                journal = get_bot_service().get_journal_summary()
+                self._send_json(200, journal)
+
+            elif path in ("/api/trading/research", "/api/research"):
+                from services.bot_service import get_bot_service
+                research = get_bot_service().get_research_summary()
+                self._send_json(200, research)
+
             else:
                 self._send_json(404, {"ok": False, "error": f"Endpoint '{self.path}' not found on Trading Engine API."})
 
         except Exception as e:
             logger.error("API error handling GET %s: %s", self.path, e)
+            self._send_json(500, {"ok": False, "error": str(e)})
+
+    def do_POST(self):
+        path = self.path.split("?")[0].rstrip("/")
+        try:
+            content_length = int(self.headers.get("Content-Length", 0))
+            body_bytes = self.rfile.read(content_length) if content_length > 0 else b"{}"
+            payload = json.loads(body_bytes.decode("utf-8")) if body_bytes else {}
+
+            if path in ("/api/trading/positions/close", "/api/positions/close"):
+                ticket = payload.get("ticket")
+                if not ticket:
+                    self._send_json(400, {"ok": False, "error": "Missing 'ticket' in request body."})
+                    return
+                from services.position_manager import close_position
+                closed = close_position(int(ticket))
+                self._send_json(200, {"ok": closed, "ticket": ticket})
+            else:
+                self._send_json(404, {"ok": False, "error": f"POST endpoint '{self.path}' not found."})
+        except Exception as e:
+            logger.error("API error handling POST %s: %s", self.path, e)
             self._send_json(500, {"ok": False, "error": str(e)})
 
     def log_message(self, format, *args):
