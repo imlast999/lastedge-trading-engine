@@ -6,7 +6,10 @@ __pycache__/
 
 # Environment & Secrets
 .env
+*.env
 secrets.json
+mt5_credentials.enc
+mt5_key.key
 *.pem
 *.key
 *.enc
