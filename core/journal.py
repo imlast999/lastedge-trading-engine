@@ -352,6 +352,15 @@ class TradeJournal:
 
     # ── Lectura y estadísticas ────────────────────────────────────────────────
 
+    def get_summary(
+        self,
+        days: int = 30,
+        symbol: Optional[str] = None,
+        mode: Optional[str] = None,
+    ) -> Dict:
+        """Alias para get_report para compatibilidad con verificadores de producción."""
+        return self.get_report(days=days, symbol=symbol, mode=mode)
+
     def get_report(
         self,
         days: int = 30,

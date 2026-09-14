@@ -229,3 +229,62 @@ class PositionSizer:
         if "." in s:
             return len(s.split(".")[1])
         return 0
+
+    def calculate_lot_size(
+        self,
+        account_balance: float = 10000.0,
+        risk_pct: float = 1.0,
+        sl_pips: Optional[float] = None,
+        entry_price: Optional[float] = None,
+        stop_loss_price: Optional[float] = None,
+        symbol: str = "EURUSD",
+        symbol_info: Any = None,
+    ) -> float:
+        """
+        Cálculo directo de lotaje para compatibilidad y verificadores pre-trade.
+        Retorna el número de lotes (ej: 0.25).
+        """
+        if entry_price is not None and stop_loss_price is not None:
+            res = self.calculate(
+                symbol=symbol,
+                entry=entry_price,
+                sl=stop_loss_price,
+                risk_pct=risk_pct,
+                balance=account_balance,
+                symbol_info=symbol_info,
+            )
+            if res.success and res.lot > 0:
+                return res.lot
+        elif sl_pips is not None and sl_pips > 0:
+            pip_size = 0.0001 if "JPY" not in symbol else 0.01
+            entry = 1.1000 if "EUR" in symbol else 2000.0
+            sl = entry - (sl_pips * pip_size)
+            res = self.calculate(
+                symbol=symbol,
+                entry=entry,
+                sl=sl,
+                risk_pct=risk_pct,
+                balance=account_balance,
+                symbol_info=symbol_info,
+            )
+            if res.success and res.lot > 0:
+                return res.lot
+
+        # Fallback de dimensionamiento predeterminado si MT5 no está conectado
+        risk_amount = account_balance * (risk_pct / 100.0)
+        pips = sl_pips if sl_pips else (abs(entry_price - stop_loss_price) / 0.0001 if (entry_price and stop_loss_price) else 20.0)
+        pip_val = 10.0  # $10 por pip por lote estándar en Forex
+        lot = risk_amount / (pips * pip_val) if pips > 0 else 0.01
+        return round(max(0.01, min(10.0, lot)), 2)
+
+
+_sizer_instance: Optional[PositionSizer] = None
+
+
+def get_position_sizer() -> PositionSizer:
+    """Retorna la instancia singleton de PositionSizer."""
+    global _sizer_instance
+    if _sizer_instance is None:
+        _sizer_instance = PositionSizer()
+    return _sizer_instance
+

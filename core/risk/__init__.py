@@ -29,6 +29,7 @@ from .config import (
 from .position_sizer import (
     PositionSizer,
     SizingResult,
+    get_position_sizer,
 )
 
 from .margin_checker import (
@@ -178,6 +179,7 @@ __all__ = [
     "load_risk_config",
     "PositionSizer",
     "SizingResult",
+    "get_position_sizer",
     "MarginChecker",
     "MarginCheckResult",
     "PortfolioRisk",

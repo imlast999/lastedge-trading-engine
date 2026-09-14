@@ -554,3 +554,9 @@ class AutoSignalsService:
 def create_autosignals_service(bot, state, config):
     """Factory para crear el servicio de auto-señales"""
     return AutoSignalsService(bot, state, config)
+
+
+# Alias para compatibilidad con verificadores
+AutoSignalsEngine = AutoSignalsService
+
+__all__ = ["AutoSignalsService", "AutoSignalsEngine", "create_autosignals_service"]

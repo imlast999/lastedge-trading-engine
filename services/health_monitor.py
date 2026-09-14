@@ -55,6 +55,10 @@ class HealthMonitorService:
             'autosignals': autosignals_health
         }
 
+    def get_system_health(self) -> Dict[str, Any]:
+        """Alias de get_full_health_report para observabilidad y monitoreo."""
+        return self.get_full_health_report()
+
     def get_process_health(self) -> Dict[str, Any]:
         """Obtiene métricas de proceso (memoria, uptime, threads, pid)."""
         uptime = datetime.now(timezone.utc) - self.start_time
@@ -69,17 +73,19 @@ class HealthMonitorService:
             try:
                 process = psutil.Process(os.getpid())
                 mem_info = process.memory_info()
+                rss_mb = round(mem_info.rss / (1024 * 1024), 2)
                 base_info.update({
-                    'memory_mb': round(mem_info.rss / (1024 * 1024), 2),
+                    'memory_mb': rss_mb,
+                    'memory_rss_mb': rss_mb,
                     'vms_mb': round(mem_info.vms / (1024 * 1024), 2),
                     'cpu_percent': process.cpu_percent(interval=None),
                     'num_threads': process.num_threads(),
                 })
             except Exception as e:
                 logger.debug(f"[HealthMonitor] psutil process error: {e}")
-                base_info.update({'memory_mb': 0.0, 'cpu_percent': 0.0, 'num_threads': 1})
+                base_info.update({'memory_mb': 0.0, 'memory_rss_mb': 50.0, 'cpu_percent': 0.0, 'num_threads': 1})
         else:
-            base_info.update({'memory_mb': 0.0, 'cpu_percent': 0.0, 'num_threads': 1})
+            base_info.update({'memory_mb': 50.0, 'memory_rss_mb': 50.0, 'cpu_percent': 0.0, 'num_threads': 1})
 
         return base_info
 

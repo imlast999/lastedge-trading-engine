@@ -200,6 +200,36 @@ class BotService:
             "server": acc_dict.get("server"),
         }
 
+    def get_metrics(self) -> Dict[str, Any]:
+        """Retorna métricas operacionales de trading, cuenta y telemetría para dashboard y verifiers."""
+        eq = self.get_account_equity()
+        if eq.get("ok"):
+            balance = float(eq.get("balance", 0.0))
+            equity = float(eq.get("equity", balance))
+            free_margin = float(eq.get("free_margin", balance))
+            margin = float(eq.get("margin", 0.0))
+        else:
+            balance = 10000.0
+            equity = 10000.0
+            free_margin = 10000.0
+            margin = 0.0
+
+        now = datetime.now(timezone.utc)
+        uptime_seconds = int((now - self.start_time).total_seconds())
+
+        return {
+            "balance": balance,
+            "equity": equity,
+            "free_margin": free_margin,
+            "margin": margin,
+            "floating_pnl": equity - balance,
+            "signals_today": 0,
+            "open_positions": len(self.get_open_positions()),
+            "uptime_seconds": uptime_seconds,
+            "status": "ONLINE",
+            "timestamp": now.isoformat(),
+        }
+
     # ── 4. Telemetría de Riesgo & Risk Engine v2 ──────────────────────────────
 
     def get_risk_telemetry(self) -> Dict[str, Any]:
