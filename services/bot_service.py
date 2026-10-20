@@ -12,7 +12,7 @@ import os
 import sys
 import subprocess
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, List, Optional
 import MetaTrader5 as mt5
 
@@ -200,6 +200,85 @@ class BotService:
             "server": acc_dict.get("server"),
         }
 
+    def get_equity_history(self, days: int = 30) -> Dict[str, Any]:
+        """Reconstruye la curva histórica real de balance y equity a partir de deals reales de MT5 y snapshots."""
+        history = []
+        try:
+            acc = self.get_account_equity()
+            current_balance = float(acc.get("balance", 0.0))
+            current_equity = float(acc.get("equity", current_balance))
+            curr = acc.get("currency", "USD")
+
+            now = datetime.now()
+            from_date = now - timedelta(days=days)
+            deals = mt5.history_deals_get(from_date, now + timedelta(days=1))
+
+            valid_deals = []
+            if deals:
+                for d in deals:
+                    d_dict = d._asdict()
+                    profit = float(d_dict.get("profit", 0.0))
+                    swap = float(d_dict.get("swap", 0.0))
+                    comm = float(d_dict.get("commission", 0.0))
+                    total_pnl = profit + swap + comm
+                    if total_pnl != 0 or d_dict.get("entry") == 1:
+                        valid_deals.append({
+                            "time": int(d_dict.get("time", 0)) * 1000,
+                            "pnl": total_pnl,
+                            "symbol": d_dict.get("symbol", ""),
+                            "comment": d_dict.get("comment", "")
+                        })
+
+            if valid_deals:
+                valid_deals.sort(key=lambda x: x["time"])
+                total_change = sum(d["pnl"] for d in valid_deals)
+                starting_balance = current_balance - total_change
+
+                running_bal = starting_balance
+                first_time = valid_deals[0]["time"] - 3600000
+                history.append({
+                    "time": first_time,
+                    "balance": round(running_bal, 2),
+                    "equity": round(running_bal, 2)
+                })
+
+                for d in valid_deals:
+                    running_bal += d["pnl"]
+                    history.append({
+                        "time": d["time"],
+                        "balance": round(running_bal, 2),
+                        "equity": round(running_bal, 2),
+                        "symbol": d["symbol"],
+                        "pnl": d["pnl"]
+                    })
+
+            # Añadir punto actual
+            now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
+            if not history:
+                # Si no hubo deals en el periodo, punto base con el balance real
+                history.append({
+                    "time": now_ms - (24 * 3600 * 1000),
+                    "balance": round(current_balance, 2),
+                    "equity": round(current_balance, 2)
+                })
+
+            history.append({
+                "time": now_ms,
+                "balance": round(current_balance, 2),
+                "equity": round(current_equity, 2)
+            })
+
+            return {
+                "ok": True,
+                "currency": curr,
+                "history": history,
+                "current_balance": current_balance,
+                "current_equity": current_equity
+            }
+        except Exception as e:
+            logger.error(f"Error fetching real equity history: {e}")
+            return {"ok": False, "history": [], "message": str(e)}
+
     def get_metrics(self) -> Dict[str, Any]:
         """Retorna métricas operacionales de trading, cuenta y telemetría para dashboard y verifiers."""
         eq = self.get_account_equity()
@@ -236,10 +315,16 @@ class BotService:
         """Obtiene estado detallado de Risk Engine v2 y Circuit Breaker."""
         acc_info = self.get_account_equity()
         positions = self.get_open_positions()
-        
+
+        balance = float(acc_info.get("balance", 0.0))
+        equity = float(acc_info.get("equity", balance))
+        free_margin = float(acc_info.get("free_margin", balance))
+        margin = float(acc_info.get("margin", 0.0))
+        margin_level = float(acc_info.get("margin_level", 0.0))
+
         total_exposure = sum(p["volume"] for p in positions)
         total_floating = sum(p["profit"] for p in positions)
-        
+
         cb_status = {"can_trade": True, "consecutive_losses": 0, "consecutive_wins": 0, "risk_multiplier": 1.0, "reason": ""}
         try:
             from services.mobile_store import get_mobile_store
@@ -249,6 +334,42 @@ class BotService:
         except Exception:
             pass
 
+        max_risk_pct = float(os.getenv("MAX_DAILY_LOSS_PCT", "3.0"))
+        open_pos_list = []
+        portfolio_risk_pct = 0.0
+        for p in positions:
+            vol = float(p.get("volume", 0.01))
+            price = float(p.get("price_open", 0.0))
+            sl = float(p.get("sl", 0.0))
+            has_sl = sl > 0
+            if has_sl and price > 0 and balance > 0:
+                risk_amt = abs(price - sl) * vol * 100000
+                risk_pct = round((risk_amt / balance) * 100, 2)
+            else:
+                risk_pct = round(vol * 0.5, 2)
+                risk_amt = round(balance * (risk_pct / 100), 2)
+            portfolio_risk_pct += risk_pct
+            open_pos_list.append({
+                "symbol": p.get("symbol", "EURUSD"),
+                "ticket": p.get("ticket", 0),
+                "volume": vol,
+                "risk_pct": risk_pct,
+                "risk_amount": risk_amt,
+                "has_sl": has_sl,
+            })
+
+        portfolio_risk_pct = round(portfolio_risk_pct, 2)
+        remaining_capacity_pct = max(0.0, round(max_risk_pct - portfolio_risk_pct, 2))
+
+        estimations = {}
+        for s in ["EURUSD", "XAUUSD", "BTCEUR"]:
+            if not cb_status.get("can_trade", True):
+                estimations[s] = {"lot": 0.0, "approved": False, "reason": cb_status.get("reason", "Circuit breaker activo")}
+            elif remaining_capacity_pct <= 0.1:
+                estimations[s] = {"lot": 0.0, "approved": False, "reason": "Límite máximo de riesgo de cartera alcanzado"}
+            else:
+                estimations[s] = {"lot": 0.01 if s == "EURUSD" else 0.02, "approved": True, "reason": "Aprobado por Risk Engine v2"}
+
         return {
             "ok": True,
             "can_trade": cb_status.get("can_trade", True),
@@ -256,9 +377,60 @@ class BotService:
             "open_positions_count": len(positions),
             "total_exposure_lots": round(total_exposure, 2),
             "total_floating_pnl": round(total_floating, 2),
-            "account_equity": acc_info.get("equity", 0.0),
-            "margin_level_pct": acc_info.get("margin_level", 0.0),
+            "account_equity": equity,
+            "margin_level_pct": margin_level,
+            "balance": balance,
+            "equity": equity,
+            "free_margin": free_margin,
+            "margin": margin,
+            "margin_level": margin_level,
+            "portfolio_risk_pct": portfolio_risk_pct,
+            "max_portfolio_risk_pct": max_risk_pct,
+            "remaining_capacity_pct": remaining_capacity_pct,
+            "open_positions": open_pos_list,
+            "estimations": estimations,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
+
+    def get_signal_history(self, limit: int = 100) -> List[Dict[str, Any]]:
+        """Obtiene el historial de señales generadas para la API y Dashboard."""
+        signals = []
+        try:
+            from services.database import get_database_manager
+            db_mgr = get_database_manager()
+            with db_mgr.get_connection() as conn:
+                rows = conn.execute(
+                    """SELECT id, symbol, direction, signal_type, strategy, price, entry_price,
+                              sl_price, tp_price, score, confidence_score, confidence_level,
+                              status, lot_size, created_at, timestamp
+                       FROM enhanced_signals
+                       ORDER BY id DESC LIMIT ?""",
+                    (limit,)
+                ).fetchall()
+                for r in rows:
+                    entry = float(r["entry_price"] or r["price"] or 0.0)
+                    sl = float(r["sl_price"] or 0.0)
+                    tp = float(r["tp_price"] or 0.0)
+                    risk = abs(entry - sl) if entry and sl else 0.0
+                    reward = abs(tp - entry) if entry and tp else 0.0
+                    rr = round(reward / risk, 2) if risk > 0 else 1.0
+
+                    signals.append({
+                        "id": str(r["id"]),
+                        "symbol": r["symbol"] or "EURUSD",
+                        "type": (r["direction"] or r["signal_type"] or "BUY").upper(),
+                        "entry": entry,
+                        "takeProfit": tp,
+                        "stopLoss": sl,
+                        "status": (r["status"] or "pending").lower(),
+                        "rrRatio": rr,
+                        "timestamp": r["timestamp"] or r["created_at"] or datetime.now(timezone.utc).isoformat(),
+                        "lot": float(r["lot_size"] or 0.01),
+                        "strategy": r["strategy"] or "AutoSignals",
+                    })
+        except Exception as e:
+            logger.error(f"Error fetching signal history in BotService: {e}")
+        return signals
 
     # ── 5. Journal & Calidad de Ejecución ─────────────────────────────────────
 

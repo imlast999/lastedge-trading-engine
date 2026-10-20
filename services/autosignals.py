@@ -115,10 +115,15 @@ class AutoSignalsService:
         entry[direction] = entry.get(direction, 0) + 1
 
     async def find_signals_channel(self) -> Optional[discord.TextChannel]:
-        """Encuentra el canal de señales"""
+        """Encuentra el canal de señales por ID o nombre"""
+        target = str(self.config.get('SIGNALS_CHANNEL_NAME', 'signals')).strip()
+        if target.isdigit():
+            ch = self.bot.get_channel(int(target))
+            if ch:
+                return ch
         for guild in self.bot.guilds:
             for channel in guild.text_channels:
-                if channel.name == self.config['SIGNALS_CHANNEL_NAME']:
+                if str(channel.id) == target or channel.name == target:
                     return channel
         return None
     

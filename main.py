@@ -30,11 +30,35 @@ def main():
     print(f"   • http://localhost:{port}/api/trading/risk")
     print("=" * 65)
     print("Presiona Ctrl+C para detener el servicio.\n")
+    sys.stdout.flush()
+
     try:
+        from datetime import datetime
+        counter = 0
         while True:
             time.sleep(1)
+            counter += 1
+            if counter % 15 == 0:
+                now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                # Intento de telemetría MT5 segura
+                mt5_info = "Standby"
+                try:
+                    import MetaTrader5 as mt5
+                    if mt5.terminal_info() is not None:
+                        pos_count = len(mt5.positions_get() or [])
+                        acc = mt5.account_info()
+                        bal = acc.balance if acc else 0.0
+                        mt5_info = f"MT5 Online (Cuenta #{acc.login if acc else '—'} | Bal: ${bal:.2f} | Pos: {pos_count})"
+                    else:
+                        mt5_info = "MT5 Standby / Offline"
+                except Exception:
+                    mt5_info = "MT5 Driver Initialized"
+
+                print(f"[{now_str}] [Trading Engine] 💓 Heartbeat OK | API :8081 activa | {mt5_info}")
+                sys.stdout.flush()
     except KeyboardInterrupt:
         print("\n🛑 Deteniendo Trading Engine...")
+        sys.stdout.flush()
         srv.stop()
 
 

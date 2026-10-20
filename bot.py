@@ -145,7 +145,7 @@ except ImportError as e:
 # ======================
 
 AUTHORIZED_USER_ID = int(os.getenv('AUTHORIZED_USER_ID', '739198540177473667'))
-SIGNALS_CHANNEL_NAME = "signals"         # configurable
+SIGNALS_CHANNEL_NAME = os.getenv("DISCORD_CHANNEL_ID") or os.getenv("SIGNALS_CHANNEL_NAME", "signals")
 TIMEFRAME = mt5.TIMEFRAME_H1
 SYMBOL = "EURUSD"
 CANDLES = 100
@@ -297,7 +297,7 @@ def log_discord_command(func):
 bot_logger = get_intelligent_logger()
 
 load_dotenv()
-DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
+DISCORD_TOKEN = os.getenv("DISCORD_BOT_TOKEN") or os.getenv("DISCORD_TOKEN")
 
 intents = discord.Intents.default()
 # Use slash commands to avoid the Message Content privileged intent
@@ -1278,10 +1278,15 @@ async def _backtest_queue_loop():
 
 
 async def _find_signals_channel():
-    # find first channel matching SIGNALS_CHANNEL_NAME across guilds
+    # find channel by numeric ID or matching name across guilds
+    target = str(SIGNALS_CHANNEL_NAME).strip()
+    if target.isdigit():
+        ch = bot.get_channel(int(target))
+        if ch:
+            return ch
     for g in bot.guilds:
         for ch in g.text_channels:
-            if ch.name == SIGNALS_CHANNEL_NAME:
+            if str(ch.id) == target or ch.name == target:
                 return ch
     return None
 
@@ -1298,10 +1303,10 @@ if __name__ == '__main__':
         print("\n" + "=" * 65)
         print("🤖 LastEdge Trading Bot (Discord Adapter)")
         print("=" * 65)
-        print("⚠️ AVISO: DISCORD_TOKEN no está configurado en 'LastEdge Trading Engine/.env'.")
+        print("⚠️ AVISO: DISCORD_BOT_TOKEN (o DISCORD_TOKEN) no está configurado en '.env'.")
         print("ℹ️ Para iniciar el bot de Discord con comandos interactivos y alertas:")
         print("   1. Abre 'LastEdge Trading Engine/.env'")
-        print("   2. Configura tu token: DISCORD_TOKEN=tu_bot_token")
+        print("   2. Configura tu token: DISCORD_BOT_TOKEN=tu_token_de_bot")
         print("   3. Vuelve a ejecutar: python bot.py")
         print("=" * 65 + "\n")
         sys.exit(0)

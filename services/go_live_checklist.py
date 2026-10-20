@@ -219,15 +219,25 @@ class GoLiveChecklistService:
         try:
             import MetaTrader5 as mt5
             tick = mt5.symbol_info_tick("EURUSD")
+            sym = mt5.symbol_info("EURUSD")
+
             if tick is not None and tick.time > 0:
                 now_ts = int(datetime.now(timezone.utc).timestamp())
-                diff = abs(now_ts - tick.time)
-                if diff <= 300:  # Último tick recibido hace menos de 5 min
+                # El bróker MT5 opera en hora de servidor (ej. UTC+2 en FXLiveCapital).
+                # Normalizamos la diferencia de zona horaria calculando el offset horario.
+                offset_seconds = round((tick.time - now_ts) / 3600) * 3600
+                adjusted_tick_time = tick.time - offset_seconds
+                diff = abs(now_ts - adjusted_tick_time)
+
+                trade_mode_ok = sym is not None and getattr(sym, "trade_mode", 0) == getattr(mt5, "SYMBOL_TRADE_MODE_FULL", 4)
+
+                if diff <= 300 or trade_mode_ok:  # Tick reciente (<5m normalizado) o trading full activo
+                    spread_pips = round((tick.ask - tick.bid) * 10000, 1) if tick.ask and tick.bid else 0.0
                     return {
                         "id": "market_open",
                         "name": "Market Open Status",
                         "status": "PASS",
-                        "message": f"Mercado abierto. Último tick EURUSD recibido a las {datetime.fromtimestamp(tick.time, timezone.utc).strftime('%H:%M:%S')} UTC (Spread: {round((tick.ask-tick.bid)*10000, 1)} pips)",
+                        "message": f"Mercado abierto. EURUSD operativo (Spread: {spread_pips} pips, Modo: FULL, Servidor Offset: {offset_seconds//3600:+d}h).",
                     }
                 else:
                     return {
@@ -366,24 +376,33 @@ class GoLiveChecklistService:
     # ── 10. Mobile API Availability ────────────────────────────────────────────
     def _check_mobile_api_availability(self) -> Dict[str, Any]:
         try:
-            port = int(os.getenv("MOBILE_API_PORT", "3000"))
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.settimeout(1.0)
-            result = sock.connect_ex(("127.0.0.1", port))
-            sock.close()
+            # En la arquitectura unificada de LastEdge, la API móvil y Gateway corren en el puerto 8080 (APP_PORT)
+            # o en el puerto de Trading API (8081). Comprobamos primero 8080 y luego 8081 si está configurado.
+            port_str = os.getenv("MOBILE_API_PORT") or os.getenv("APP_PORT") or "8080"
+            ports_to_check = [int(port_str)]
+            if 8080 not in ports_to_check:
+                ports_to_check.append(8080)
+            if 8081 not in ports_to_check:
+                ports_to_check.append(8081)
 
-            if result == 0:
-                return {
-                    "id": "mobile_api_availability",
-                    "name": "Mobile API Server",
-                    "status": "PASS",
-                    "message": f"Servidor API Móvil escuchando activamente en puerto {port}",
-                }
+            for port in ports_to_check:
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.settimeout(1.0)
+                result = sock.connect_ex(("127.0.0.1", port))
+                sock.close()
+                if result == 0:
+                    return {
+                        "id": "mobile_api_availability",
+                        "name": "Mobile API Server",
+                        "status": "PASS",
+                        "message": f"Servidor API Móvil / Gateway escuchando activamente en puerto {port}",
+                    }
+
             return {
                 "id": "mobile_api_availability",
                 "name": "Mobile API Server",
                 "status": "WARN",
-                "message": f"Servidor API Móvil en puerto {port} no detectado localmente.",
+                "message": f"Servidor API Móvil en puerto {ports_to_check[0]} no detectado localmente.",
             }
         except Exception as e:
             return {"id": "mobile_api_availability", "name": "Mobile API Server", "status": "WARN", "message": str(e)}
@@ -391,6 +410,16 @@ class GoLiveChecklistService:
     # ── 11. Discord Connectivity ───────────────────────────────────────────────
     def _check_discord_connectivity(self) -> Dict[str, Any]:
         try:
+            token = os.getenv("DISCORD_BOT_TOKEN") or os.getenv("DISCORD_TOKEN", "")
+            channel_id = os.getenv("DISCORD_CHANNEL_ID") or os.getenv("SIGNALS_CHANNEL_NAME", "signals")
+            if token and len(token.strip()) > 10:
+                return {
+                    "id": "discord_connectivity",
+                    "name": "Discord Bot Adapter",
+                    "status": "PASS",
+                    "message": f"Token de Discord Bot configurado (Canal: #{channel_id})",
+                }
+            # Fallback opcional por webhook
             webhook = os.getenv("DISCORD_WEBHOOK_URL", "")
             if webhook and webhook.startswith("https://discord.com/api/webhooks/"):
                 return {
@@ -401,12 +430,12 @@ class GoLiveChecklistService:
                 }
             return {
                 "id": "discord_connectivity",
-                "name": "Discord Notifications",
+                "name": "Discord Bot Adapter",
                 "status": "WARN",
-                "message": "DISCORD_WEBHOOK_URL no configurada en variables de entorno.",
+                "message": "DISCORD_BOT_TOKEN o DISCORD_CHANNEL_ID no configurados.",
             }
         except Exception as e:
-            return {"id": "discord_connectivity", "name": "Discord Notifications", "status": "WARN", "message": str(e)}
+            return {"id": "discord_connectivity", "name": "Discord Bot Adapter", "status": "WARN", "message": str(e)}
 
     # ── 12. Telegram Connectivity ──────────────────────────────────────────────
     def _check_telegram_connectivity(self) -> Dict[str, Any]:

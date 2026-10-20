@@ -132,6 +132,11 @@ class TradingAPIHandler(BaseHTTPRequestHandler):
                 eq = get_bot_service().get_account_equity()
                 self._send_json(200, {"ok": True, "equity": eq})
 
+            elif path in ("/api/trading/equity/history", "/api/equity/history", "/api/trading/balance/history"):
+                from services.bot_service import get_bot_service
+                res = get_bot_service().get_equity_history(days=30)
+                self._send_json(200, res)
+
             elif path in ("/api/trading/signals", "/api/signals"):
                 from services.bot_service import get_bot_service
                 history = get_bot_service().get_signal_history(limit=100)
@@ -162,6 +167,11 @@ class TradingAPIHandler(BaseHTTPRequestHandler):
                 research = get_bot_service().get_research_summary()
                 self._send_json(200, research)
 
+            elif path in ("/api/trading/autosignals", "/api/autosignals"):
+                from services.bot_service import get_bot_service
+                res = get_bot_service().toggle_autosignals(mode="status")
+                self._send_json(200, res)
+
             else:
                 self._send_json(404, {"ok": False, "error": f"Endpoint '{self.path}' not found on Trading Engine API."})
 
@@ -184,6 +194,13 @@ class TradingAPIHandler(BaseHTTPRequestHandler):
                 from services.position_manager import close_position
                 closed = close_position(int(ticket))
                 self._send_json(200, {"ok": closed, "ticket": ticket})
+
+            elif path in ("/api/trading/autosignals", "/api/autosignals"):
+                mode = payload.get("mode", "status")
+                from services.bot_service import get_bot_service
+                res = get_bot_service().toggle_autosignals(mode=mode)
+                self._send_json(200, res)
+
             else:
                 self._send_json(404, {"ok": False, "error": f"POST endpoint '{self.path}' not found."})
         except Exception as e:
@@ -191,8 +208,10 @@ class TradingAPIHandler(BaseHTTPRequestHandler):
             self._send_json(500, {"ok": False, "error": str(e)})
 
     def log_message(self, format, *args):
-        # Suppress standard HTTP request logging spam
-        pass
+        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        msg = format % args
+        print(f"[{now_str}] [Trading Engine] {msg}")
+        sys.stdout.flush()
 
 
 class TradingAPIServer:
