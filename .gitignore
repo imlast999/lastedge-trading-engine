@@ -28,3 +28,11 @@ trading.db-shm
 # Logs
 logs/
 *.log
+
+# Private Strategy Vault (Proprietary / Exclusive Strategies - Never commit to public repo)
+strategies/vault/*
+!strategies/vault/.gitkeep
+!strategies/vault/README.md
+strategies/private/*
+!strategies/private/.gitkeep
+

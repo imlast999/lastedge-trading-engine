@@ -9,6 +9,7 @@ configuración manipulada o interfaz no conforme a BaseStrategy pueda ejecutarse
 
 from __future__ import annotations
 
+import os
 import json
 import hashlib
 import importlib.util
@@ -264,3 +265,187 @@ def register_promoted_strategies(
         )
 
     return registered_count
+
+
+def discover_vault_strategies(vault_dir: Optional[Union[str, Path]] = None) -> Dict[str, Dict[str, Any]]:
+    """
+    Escanea el directorio privado de estrategias (Vault) buscando estrategias propietarias:
+    1. Paquetes promovidos (*.json con code_sha256).
+    2. Archivos Python directos (*.py) que hereden de BaseStrategy (excluyendo base.py, __init__.py, etc.).
+
+    Retorna un diccionario indexado por clave de estrategia:
+    {
+        'xauusd_alpha': {
+            'class': XAUUSDAlphaStrategy,
+            'symbol': 'XAUUSD',
+            'version': '1.0',
+            'strategy_name': 'XAUUSDAlphaStrategy',
+            'code_path': Path(...),
+            'is_promoted': False
+        }
+    }
+    """
+    if vault_dir is None:
+        env_vault = os.environ.get("LASTEDGE_VAULT_PATH") or os.environ.get("STRATEGIES_DIR")
+        if env_vault:
+            vault_dir = Path(env_vault)
+        else:
+            vault_dir = Path(__file__).parent.parent / "strategies" / "vault"
+    else:
+        vault_dir = Path(vault_dir)
+
+    if not vault_dir.exists() or not vault_dir.is_dir():
+        logger.debug("[StrategyVault] Vault directory not found or inactive: %s", vault_dir)
+        return {}
+
+    loader = StrategyLoader()
+    discovered: Dict[str, Dict[str, Any]] = {}
+
+    # 1. Paquetes con manifiesto (*.json) dentro del vault
+    for manifest_path in vault_dir.glob("*.json"):
+        try:
+            with open(manifest_path, "r", encoding="utf-8") as f:
+                header = json.load(f)
+            if not isinstance(header, dict) or "code_sha256" not in header or "strategy_name" not in header:
+                continue
+        except Exception:
+            continue
+
+        cls, msg, manifest = loader.load_strategy_class(manifest_path)
+        if cls is not None:
+            base_key = manifest_path.stem.lower()
+            code_file = manifest.get("code_file", f"{manifest_path.stem}.py")
+            discovered[base_key] = {
+                "class": cls,
+                "manifest": manifest,
+                "manifest_path": manifest_path,
+                "code_path": manifest_path.parent / code_file,
+                "symbol": manifest.get("symbol", "UNKNOWN").upper(),
+                "version": manifest.get("version", "1.0"),
+                "strategy_name": manifest.get("strategy_name", cls.__name__),
+                "is_promoted": True,
+            }
+        else:
+            logger.warning("[StrategyVault] Skipping invalid manifest %s: %s", manifest_path.name, msg)
+
+    # 2. Archivos Python de estrategia directa (*.py) dentro del vault
+    for py_path in vault_dir.glob("**/*.py"):
+        if py_path.name.startswith(("_", ".")) or py_path.name in ("base.py", "setup.py", "conftest.py"):
+            continue
+        if py_path.stem.endswith("_test") or py_path.stem.startswith("test_"):
+            continue
+        # Si ya se cargó a través de manifiesto .json, evitar duplicar
+        if py_path.stem.lower() in discovered:
+            continue
+
+        module_name = f"vault_strat_{py_path.stem}"
+        try:
+            spec = importlib.util.spec_from_file_location(module_name, py_path)
+            if spec is None or spec.loader is None:
+                continue
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+        except Exception as e:
+            logger.error("[StrategyVault] Error loading private strategy from %s: %s", py_path.name, e)
+            continue
+
+        # Buscar subclases de BaseStrategy
+        for attr_name in dir(mod):
+            attr = getattr(mod, attr_name)
+            if isinstance(attr, type) and issubclass(attr, BaseStrategy) and attr is not BaseStrategy:
+                # Determinar símbolo
+                strat_symbol = getattr(attr, "symbol", None)
+                strat_name = getattr(attr, "strategy_name", attr.__name__)
+                strat_ver = getattr(attr, "version", "1.0")
+
+                if not strat_symbol:
+                    try:
+                        temp_inst = attr()
+                        strat_symbol = getattr(temp_inst, "symbol", None)
+                        if not strat_symbol and hasattr(temp_inst, "metadata"):
+                            strat_symbol = getattr(temp_inst.metadata, "symbol", None)
+                    except Exception:
+                        pass
+
+                if not strat_symbol:
+                    # Inferencia defensiva desde el nombre
+                    upper_name = attr.__name__.upper()
+                    for known_sym in ("EURUSD", "XAUUSD", "BTCEUR", "BTCUSD", "US500", "NAS100"):
+                        if known_sym in upper_name or known_sym in py_path.stem.upper():
+                            strat_symbol = known_sym
+                            break
+                    if not strat_symbol:
+                        strat_symbol = py_path.stem.upper()
+
+                key = py_path.stem.lower()
+                discovered[key] = {
+                    "class": attr,
+                    "symbol": strat_symbol.upper(),
+                    "version": str(strat_ver),
+                    "strategy_name": strat_name,
+                    "code_path": py_path,
+                    "is_promoted": False,
+                }
+                logger.info(
+                    "[StrategyVault] Discovered private strategy '%s' for symbol '%s' in %s",
+                    attr.__name__,
+                    strat_symbol.upper(),
+                    py_path.name
+                )
+
+    return discovered
+
+
+def register_vault_strategies(
+    target_registry: Optional[Dict[str, Any]] = None,
+    vault_dir: Optional[Union[str, Path]] = None
+) -> int:
+    """
+    Descubre estrategias privadas en el Vault y las registra con MÁXIMA PRIORIDAD
+    en target_registry (o en STRATEGY_REGISTRY por defecto) y en services.signals.
+    Cualquier estrategia provista en el Vault sobreescribe la versión pública por defecto
+    para el mismo símbolo.
+    """
+    if target_registry is None:
+        import strategies
+        target_registry = strategies.STRATEGY_REGISTRY
+
+    discovered = discover_vault_strategies(vault_dir)
+    registered_count = 0
+
+    for base_key, info in discovered.items():
+        cls = info["class"]
+        symbol = info["symbol"]
+        strat_name = info["strategy_name"]
+
+        # 1. Registrar por clave base (ej: 'gold_vault_alpha')
+        target_registry[base_key] = cls
+        target_registry[base_key.upper()] = cls
+
+        # 2. Registrar por nombre de estrategia
+        target_registry[strat_name.lower()] = cls
+        target_registry[strat_name] = cls
+
+        # 3. Registrar con prioridad sobre el símbolo (ej: 'XAUUSD', 'EURUSD', 'BTCEUR')
+        target_registry[symbol] = cls
+        target_registry[symbol.lower()] = cls
+
+        # 4. Sincronizar con services.signals.STRATEGY_REGISTRY si existe
+        try:
+            import services.signals as _signals_svc
+            _signals_svc.register_strategy(base_key, cls)
+            _signals_svc.register_strategy(strat_name.lower(), cls)
+            _signals_svc.register_strategy(symbol.lower(), cls)
+            _signals_svc.register_strategy(symbol.upper(), cls)
+        except Exception as _sig_err:
+            logger.debug("[StrategyVault] Could not sync with services.signals: %s", _sig_err)
+
+        registered_count += 1
+        logger.info(
+            "[StrategyVault] Activated proprietary strategy '%s' mapped to symbol '%s'",
+            cls.__name__,
+            symbol
+        )
+
+    return registered_count
+

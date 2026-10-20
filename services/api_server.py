@@ -137,6 +137,16 @@ class TradingAPIHandler(BaseHTTPRequestHandler):
                 res = get_bot_service().get_equity_history(days=30)
                 self._send_json(200, res)
 
+            elif path in ("/api/trading/radar", "/api/radar"):
+                from services.bot_service import get_bot_service
+                symbol = "XAUUSD"
+                if "?" in self.path:
+                    from urllib.parse import parse_qs, urlparse
+                    query = parse_qs(urlparse(self.path).query)
+                    symbol = query.get("symbol", ["XAUUSD"])[0]
+                radar_data = get_bot_service().get_strategy_radar(symbol=symbol)
+                self._send_json(200, radar_data)
+
             elif path in ("/api/trading/signals", "/api/signals"):
                 from services.bot_service import get_bot_service
                 history = get_bot_service().get_signal_history(limit=100)

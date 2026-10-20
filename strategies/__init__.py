@@ -47,12 +47,15 @@ if XAUUSD_GSRS_AVAILABLE:
 if BTCEUR_AVAILABLE:
     STRATEGY_REGISTRY['BTCEUR'] = BTCEURPartialStrategy
 
-# Ingestión automática de paquetes promovidos desde Strategy Lab (.py + .json verificados)
+# Ingestión automática de paquetes promovidos y estrategias privadas (Vault)
 try:
-    from services.strategy_loader import register_promoted_strategies
+    from services.strategy_loader import register_promoted_strategies, register_vault_strategies
     register_promoted_strategies(STRATEGY_REGISTRY)
+    vault_count = register_vault_strategies(STRATEGY_REGISTRY)
+    if vault_count > 0:
+        logger.info("[StrategyVault] %d proprietary strategies activated from private vault.", vault_count)
 except Exception as _loader_err:
-    logger.debug("StrategyLoader auto-discovery deferred/skipped: %s", _loader_err)
+    logger.debug("StrategyLoader / Vault auto-discovery deferred/skipped: %s", _loader_err)
 
 
 def get_strategy(symbol: str):
