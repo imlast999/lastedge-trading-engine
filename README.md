@@ -49,7 +49,7 @@ Both the Trading Engine and Strategy Lab share the exact canonical strategy cont
 
 ```text
 LastEdge Trading Engine/
-├── bot.py                          # Main trading loop & signal scanner
+├── main.py                         # Production Trading Engine entry point (API + Market Scanner)
 ├── mt5_client.py                   # Low-level MetaTrader 5 connection driver
 ├── reconnection_system.py          # Auto-reconnection & MT5 health checker
 ├── secrets_store.py                # Secure credential storage
@@ -112,7 +112,7 @@ TRADING_API_PORT=8081
 
 ### Step 3: Run Trading Engine
 ```bash
-python bot.py
+python main.py
 ```
 To run the REST API server independently:
 ```bash

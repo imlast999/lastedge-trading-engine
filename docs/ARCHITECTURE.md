@@ -40,7 +40,7 @@
 ## 2. Core Modules Breakdown
 
 ### 2.1 Execution Layer
-- **`bot.py`**: The top-level orchestrator. Runs the main event loop, checks market opening schedules, triggers strategy scans across monitored symbols, passes candidates through Risk Engine v2, and executes trades.
+- **`main.py`**: The top-level orchestrator. Runs the main event loop and API server, schedules market scanner scans across monitored symbols, passes candidates through Risk Engine v2, and executes trades.
 - **`services/execution.py`**: Handles direct MT5 order submission (`ORDER_TYPE_BUY`, `ORDER_TYPE_SELL`), slippage deviation, magic numbers, and response parsing.
 - **`services/reconnection_system.py`**: Monitors connection health with heartbeat checks. In case of disconnection, initiates exponential backoff retries without blocking other threads.
 

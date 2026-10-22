@@ -1,13 +1,13 @@
 # LastEdge Trading Engine — Execution Lifecycle & Flow
 
 > **Module:** `LastEdge Trading Engine`  
-> **Source Files:** `bot.py`, `services/execution.py`, `services/autosignals.py`  
+> **Source Files:** `main.py`, `services/execution.py`, `services/autosignals.py`  
 
 ---
 
 ## 1. Main Trading Loop Lifecycle
 
-The live execution loop in `bot.py` operates on a deterministic pipeline:
+The live execution loop in `main.py` (via `AutoSignalsService`) operates on a deterministic pipeline:
 
 ```text
 [Loop Wakeup] (Every SCAN_INTERVAL seconds)

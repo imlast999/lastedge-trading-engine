@@ -21,9 +21,9 @@
    - Log into trading account and check **"Save password"**.
    - Navigate to `Tools -> Options -> Expert Advisors` and enable **"Allow automated trading"**.
 2. **Windows Task Scheduler Autostart:**
-   - Create a startup task to launch `bot.py` on system boot:
+   - Create a startup task to launch `main.py` on system boot:
      ```powershell
-     powershell -ExecutionPolicy Bypass -Command "cd C:\TradingEngine; .\venv\Scripts\Activate.ps1; python bot.py"
+     powershell -ExecutionPolicy Bypass -Command "cd C:\TradingEngine; .\venv\Scripts\Activate.ps1; python main.py"
      ```
 3. **Firewall & Security:**
    - Allow incoming TCP connections on port `8081` only for whitelisted internal IP addresses (e.g. from `LastEdge App`).
