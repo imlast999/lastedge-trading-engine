@@ -211,15 +211,18 @@
     
     "trailing_stops": {
       "enabled": true,
-      "breakeven_at_profit_pct": 50,
-      "trailing_start_pct": 75,
-      "partial_close_pct": 100,
+      "breakeven_r_multiple": 0.8,
+      "breakeven_at_profit_pct": 30,
+      "trailing_start_r_multiple": 1.2,
+      "trailing_start_pct": 50,
+      "partial_close_r_multiple": 1.5,
+      "partial_close_pct": 70,
       "partial_close_amount": 50,
-      "update_interval_seconds": 30,
-      "trailing_distances": {
-        "EURUSD": 150,
-        "XAUUSD": 500,
-        "BTCEUR": 5000
+      "update_interval_seconds": 15,
+      "price_distances": {
+        "EURUSD": 0.0015,
+        "XAUUSD": 5.0,
+        "BTCEUR": 500.0
       }
     },
     

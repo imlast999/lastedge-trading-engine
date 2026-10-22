@@ -92,6 +92,23 @@ class DatabaseService:
                     updated_at      TEXT    DEFAULT (datetime('now'))
                 )
             """)
+            c.execute("""
+                CREATE TABLE IF NOT EXISTS active_trailing_stops (
+                    ticket          INTEGER PRIMARY KEY,
+                    symbol          TEXT    NOT NULL,
+                    entry_price     REAL    NOT NULL,
+                    original_sl     REAL    NOT NULL,
+                    original_tp     REAL    NOT NULL,
+                    trade_type      TEXT    NOT NULL,
+                    current_sl      REAL    NOT NULL,
+                    highest_profit  REAL    DEFAULT 0.0,
+                    breakeven_moved INTEGER DEFAULT 0,
+                    trailing_active INTEGER DEFAULT 0,
+                    partial_closed  INTEGER DEFAULT 0,
+                    created_at      TEXT,
+                    updated_at      TEXT
+                )
+            """)
 
         # Inicialización de tablas de la app móvil
         try:
@@ -160,6 +177,73 @@ class DatabaseService:
             c = conn.cursor()
             today = datetime.now(timezone.utc).date().isoformat()
             c.execute('INSERT OR REPLACE INTO trades_counter(date,count) VALUES(?,?)', (today, 0))
+
+    def save_trailing_stop(self, ticket: int, data: dict) -> None:
+        """Guarda o actualiza el estado de un trailing stop."""
+        now_iso = datetime.now(timezone.utc).isoformat()
+        with self.db_manager.get_connection() as conn:
+            c = conn.cursor()
+            c.execute("""
+                INSERT INTO active_trailing_stops (
+                    ticket, symbol, entry_price, original_sl, original_tp,
+                    trade_type, current_sl, highest_profit, breakeven_moved,
+                    trailing_active, partial_closed, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(ticket) DO UPDATE SET
+                    current_sl=excluded.current_sl,
+                    highest_profit=excluded.highest_profit,
+                    breakeven_moved=excluded.breakeven_moved,
+                    trailing_active=excluded.trailing_active,
+                    partial_closed=excluded.partial_closed,
+                    updated_at=excluded.updated_at
+            """, (
+                ticket,
+                data.get('symbol', ''),
+                float(data.get('entry_price', 0.0)),
+                float(data.get('original_sl', 0.0)),
+                float(data.get('original_tp', 0.0)),
+                data.get('trade_type', 'BUY'),
+                float(data.get('current_sl', 0.0)),
+                float(data.get('highest_profit', 0.0)),
+                1 if data.get('breakeven_moved') else 0,
+                1 if data.get('trailing_active') else 0,
+                1 if data.get('partial_closed') else 0,
+                data.get('created_at', now_iso),
+                now_iso
+            ))
+
+    def delete_trailing_stop(self, ticket: int) -> None:
+        """Elimina un trailing stop cuando la posición ha sido cerrada."""
+        with self.db_manager.get_connection() as conn:
+            c = conn.cursor()
+            c.execute('DELETE FROM active_trailing_stops WHERE ticket=?', (ticket,))
+
+    def load_all_trailing_stops(self) -> Dict[int, dict]:
+        """Carga todos los trailing stops activos desde la base de datos."""
+        trails = {}
+        with self.db_manager.get_connection() as conn:
+            c = conn.cursor()
+            c.execute("""
+                SELECT ticket, symbol, entry_price, original_sl, original_tp,
+                       trade_type, current_sl, highest_profit, breakeven_moved,
+                       trailing_active, partial_closed, created_at
+                FROM active_trailing_stops
+            """)
+            for row in c.fetchall():
+                trails[row['ticket']] = {
+                    'symbol': row['symbol'],
+                    'entry_price': row['entry_price'],
+                    'original_sl': row['original_sl'],
+                    'original_tp': row['original_tp'],
+                    'trade_type': row['trade_type'],
+                    'current_sl': row['current_sl'],
+                    'highest_profit': row['highest_profit'],
+                    'breakeven_moved': bool(row['breakeven_moved']),
+                    'trailing_active': bool(row['trailing_active']),
+                    'partial_closed': bool(row['partial_closed']),
+                    'created_at': row['created_at']
+                }
+        return trails
 
 
 # Instancia global del DatabaseManager y DatabaseService

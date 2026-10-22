@@ -62,7 +62,7 @@ class BackgroundTradingRunner:
                         trailing_mgr.update_all_trailing_stops()
                 except Exception as ex:
                     logger.debug(f"Error en bucle de trailing stops: {ex}")
-                await asyncio.sleep(30)
+                await asyncio.sleep(15)
 
         tasks = [
             self.autosignals_svc.start_auto_signal_loop(),

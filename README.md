@@ -9,7 +9,7 @@
 > **Repository:** [`imlast999/lastedge-trading-engine`](https://github.com/imlast999/lastedge-trading-engine)  
 > **Role:** Production Execution Engine, Risk Engine v2, Dynamic Strategy Loader & MT5 Driver  
 > **Status:** Production Ready  
-> **Tests:** 89 / 89 Passed (100% Green)  
+> **Tests:** 102 / 102 Passed (100% Green)  
 
 </div>
 
@@ -134,7 +134,7 @@ python -m services.api_server 8081
 # Run complete test suite locally
 python -m pytest tests/ -v
 ```
-Current test suite status: **89 / 89 passed (100% Green)**.
+Current test suite status: **102 / 102 passed (100% Green)**.
 
 ### CI / Continuous Integration:
 - **Pipeline**: Automated on every push and pull request to `main` via [GitHub Actions](.github/workflows/ci.yml).
