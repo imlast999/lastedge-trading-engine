@@ -33,7 +33,7 @@ class BotState:
     trades_current_period: int = 0  # Trades en el período actual (12h)
     current_period_start: datetime = field(default_factory=get_current_period_start)
     mt5_credentials: Dict[str, Any] = field(default_factory=dict)
-    autosignals: bool = field(default_factory=lambda: os.getenv('AUTOSIGNALS', '0') == '1')
+    autosignals: bool = field(default_factory=lambda: os.getenv('AUTOSIGNALS', '1') == '1')
     last_auto_sent: Dict[str, Any] = field(default_factory=dict)
 
 # Estado global de símbolos activos (punto único de verdad)
@@ -239,7 +239,7 @@ class TradingEngine:
         
         # 3. Reset cached strategy instances (stateful strategies como asian_breakout)
         try:
-            from signals import reset_strategy_instances
+            from services.signals import reset_strategy_instances
             reset_strategy_instances()
         except Exception:
             pass
@@ -292,7 +292,7 @@ class TradingEngine:
                 )
 
             # 1. Detectar señal básica
-            from signals import detect_signal
+            from services.signals import detect_signal
             raw_signal, df_with_indicators = detect_signal(df, strategy, config, symbol=symbol)
             
             if not raw_signal:

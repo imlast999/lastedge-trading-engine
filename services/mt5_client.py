@@ -2,8 +2,61 @@ import MetaTrader5 as mt5
 import logging
 import pandas as pd
 import time
+from typing import Optional, List, Dict
 
 logger = logging.getLogger(__name__)
+
+
+def ensure_symbols_selected(symbols: Optional[List[str]] = None) -> Dict[str, bool]:
+    """
+    Garantiza que los símbolos estén visibles y seleccionados en la ventana Market Watch de MT5
+    para recibir ticks en tiempo real. Soporta búsqueda con sufijos/prefijos de brokers.
+    """
+    if symbols is None:
+        symbols = ["EURUSD", "XAUUSD", "BTCEUR"]
+
+    results: Dict[str, bool] = {}
+    if mt5.terminal_info() is None:
+        return results
+
+    try:
+        all_broker_symbols = mt5.symbols_get() or []
+        broker_sym_map = {s.name.upper(): s.name for s in all_broker_symbols}
+    except Exception as e:
+        logger.debug(f"Error obteniendo lista de símbolos de MT5: {e}")
+        all_broker_symbols = []
+        broker_sym_map = {}
+
+    for sym in symbols:
+        sym_clean = sym.strip().upper()
+        # 1. Búsqueda exacta
+        matched_name = broker_sym_map.get(sym_clean)
+        # 2. Búsqueda por coincidencia si el broker usa sufijos (ej. EURUSD.m, XAUUSD_i, etc.)
+        if not matched_name:
+            for b_name_upper, b_name in broker_sym_map.items():
+                if sym_clean in b_name_upper or b_name_upper.startswith(sym_clean):
+                    matched_name = b_name
+                    break
+
+        target_sym = matched_name or sym
+        try:
+            si = mt5.symbol_info(target_sym)
+            if si is not None:
+                if not si.visible:
+                    ok = mt5.symbol_select(target_sym, True)
+                    logger.info("Market Watch: mt5.symbol_select(%s, True) -> %s", target_sym, ok)
+                    results[sym] = bool(ok)
+                else:
+                    results[sym] = True
+            else:
+                logger.warning("Market Watch: símbolo %s no encontrado en terminal MT5", sym)
+                results[sym] = False
+        except Exception as sel_err:
+            logger.warning("Market Watch: error seleccionando %s: %s", target_sym, sel_err)
+            results[sym] = False
+
+    return results
+
 
 def initialize(path=None, retries: int = 3, backoff_factor: float = 2.0, initial_delay: float = 1.0):
     """Initialize MT5 with simple retry/backoff.
@@ -41,6 +94,10 @@ def initialize(path=None, retries: int = 3, backoff_factor: float = 2.0, initial
             ok = mt5.initialize(**kwargs)
             if ok:
                 logger.info("MT5 initialized")
+                try:
+                    ensure_symbols_selected()
+                except Exception as sel_e:
+                    logger.debug(f"Aviso seleccionando símbolos en inicialización: {sel_e}")
                 return True
             else:
                 err = mt5.last_error()

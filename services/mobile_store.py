@@ -247,8 +247,7 @@ class MobileStore:
         status: str = "PROPOSED",
     ) -> Optional[int]:
         if not self._session_id:
-            logger.warning("[MobileStore] insert_signal sin session_id activo")
-            return None
+            self.start_session()
         now = _db_ts()
         score_int = int(confidence_score * 100) if confidence_score <= 1 else int(confidence_score)
         executed = 1 if status.upper() in ("OPEN", "EXECUTED", "ACCEPTED") else 0

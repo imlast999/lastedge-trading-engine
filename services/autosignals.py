@@ -10,7 +10,7 @@ import json
 import logging
 import os
 from datetime import datetime, timezone, timedelta
-from typing import Optional
+from typing import Optional, Any, Dict, List
 import discord
 
 logger = logging.getLogger(__name__)
@@ -18,9 +18,26 @@ logger = logging.getLogger(__name__)
 class AutoSignalsService:
     """Servicio para manejo de señales automáticas"""
     
-    def __init__(self, bot, state, config):
+    def __init__(self, bot=None, state=None, config=None):
         self.bot = bot
+        if state is None:
+            from core import BotState
+            state = BotState(autosignals=True)
         self.state = state
+
+        if config is None:
+            import os
+            symbols_str = os.getenv("AUTOSIGNAL_SYMBOLS", "EURUSD,XAUUSD,BTCEUR")
+            symbols = [s.strip() for s in symbols_str.split(",") if s.strip()]
+            config = {
+                'AUTOSIGNAL_SYMBOLS': symbols,
+                'AUTOSIGNAL_INTERVAL': int(os.getenv("AUTOSIGNAL_INTERVAL", "60")),
+                'SIGNALS_CHANNEL_NAME': os.getenv("DISCORD_CHANNEL_ID") or os.getenv("SIGNALS_CHANNEL_NAME", "signals"),
+                'MAX_TRADES_PER_DAY': int(os.getenv("MAX_DAILY_TRADES_ALL", "12")),
+                'MAX_TRADES_PER_PERIOD': 6,
+                'KILL_SWITCH': False,
+                'AUTO_EXECUTE_SIGNALS': os.getenv("AUTO_EXECUTE_SIGNALS", "1") == "1",
+            }
         self.config = config
         self.scan_count = 0
         # Cooldown por símbolo: guarda el timestamp de la última señal enviada
@@ -115,21 +132,31 @@ class AutoSignalsService:
         entry[direction] = entry.get(direction, 0) + 1
 
     async def find_signals_channel(self) -> Optional[discord.TextChannel]:
-        """Encuentra el canal de señales por ID o nombre"""
+        """Encuentra el canal de señales por ID o nombre si bot está disponible"""
+        if not self.bot:
+            return None
         target = str(self.config.get('SIGNALS_CHANNEL_NAME', 'signals')).strip()
-        if target.isdigit():
-            ch = self.bot.get_channel(int(target))
-            if ch:
-                return ch
-        for guild in self.bot.guilds:
-            for channel in guild.text_channels:
-                if str(channel.id) == target or channel.name == target:
-                    return channel
+        try:
+            if target.isdigit():
+                ch = self.bot.get_channel(int(target))
+                if ch:
+                    return ch
+            guilds = getattr(self.bot, 'guilds', []) or []
+            for guild in guilds:
+                for channel in getattr(guild, 'text_channels', []):
+                    if str(channel.id) == target or channel.name == target:
+                        return channel
+        except Exception as e:
+            logger.debug(f"find_signals_channel exception: {e}")
         return None
     
     async def start_auto_signal_loop(self):
         """Inicia el loop principal de auto-señales"""
-        await self.bot.wait_until_ready()
+        if self.bot and hasattr(self.bot, 'wait_until_ready'):
+            try:
+                await self.bot.wait_until_ready()
+            except Exception:
+                pass
 
         from services.logging import log_event
         from core.circuit_breaker import get_circuit_breaker
@@ -237,16 +264,13 @@ class AutoSignalsService:
                 "AUTOSIGNAL"
             )
 
-        channel = await self.find_signals_channel()
-        if channel is None:
-            # Notificar cada 50 escaneos para no spamear logs
-            if self.scan_count % 50 == 1:
-                log_event(
-                    f"⚠️ Canal #{self.config['SIGNALS_CHANNEL_NAME']} no encontrado. "
-                    f"Las señales no se enviarán hasta que el canal exista.",
-                    "WARNING", "AUTOSIGNAL"
-                )
-            return
+        channel = await self.find_signals_channel() if self.bot else None
+        if channel is None and self.scan_count % 50 == 1:
+            log_event(
+                f"ℹ️ Canal de Discord no conectado o en modo headless. "
+                f"Las señales se registrarán en base de datos, dashboard y Telegram.",
+                "INFO", "AUTOSIGNAL"
+            )
 
         signals_found = 0
         for symbol in self.config['AUTOSIGNAL_SYMBOLS']:
@@ -260,7 +284,7 @@ class AutoSignalsService:
         if self.scan_count % 30 == 0:
             await self._log_periodic_stats()
     
-    async def _process_symbol(self, symbol: str, channel: discord.TextChannel) -> bool:
+    async def _process_symbol(self, symbol: str, channel: Optional[Any] = None) -> bool:
         """Procesa un símbolo individual"""
         try:
             from services.logging import log_event
@@ -407,28 +431,27 @@ class AutoSignalsService:
                 else:
                     embed.set_footer(text="Auto-Signal System | Requiere aprobación manual")
                 
-                # Generar gráfico con la señal
-                chart_file = None
-                try:
-                    from charts import generate_chart
-                    chart_filename = generate_chart(df, symbol=symbol, signal=signal)
-                    if chart_filename:
-                        chart_file = discord.File(chart_filename, filename=f"{symbol}_signal.png")
-                        embed.set_image(url=f"attachment://{symbol}_signal.png")
-                except Exception as chart_error:
-                    logger.warning(f"Error generando gráfico para {symbol}: {chart_error}")
-                
-                # Enviar señal con gráfico
-                if chart_file:
-                    await channel.send(embed=embed, file=chart_file)
-                    # Limpiar archivo temporal
+                # Generar gráfico con la señal si Discord está conectado
+                if channel:
+                    chart_file = None
                     try:
-                        import os
-                        os.remove(chart_filename)
-                    except Exception:
-                        pass
-                else:
-                    await channel.send(embed=embed)
+                        from charts import generate_chart
+                        chart_filename = generate_chart(df, symbol=symbol, signal=signal)
+                        if chart_filename:
+                            chart_file = discord.File(chart_filename, filename=f"{symbol}_signal.png")
+                            embed.set_image(url=f"attachment://{symbol}_signal.png")
+                    except Exception as chart_error:
+                        logger.warning(f"Error generando gráfico para {symbol}: {chart_error}")
+                    
+                    if chart_file:
+                        await channel.send(embed=embed, file=chart_file)
+                        try:
+                            import os
+                            os.remove(chart_filename)
+                        except Exception:
+                            pass
+                    else:
+                        await channel.send(embed=embed)
                 
                 # Log señal enviada
                 approval_status = "AUTO-APROBADA ✅" if auto_approved else "MANUAL ⏳"
@@ -444,6 +467,26 @@ class AutoSignalsService:
                     record_signal(symbol.upper())
                 except Exception:
                     pass
+
+                # ── Guardar señal en Base de Datos (enhanced_signals) para Dashboard y Mobile ──
+                saved_signal_id = None
+                try:
+                    from services.mobile_store import get_mobile_store
+                    m_store = get_mobile_store()
+                    saved_signal_id = m_store.insert_signal(
+                        symbol=symbol.upper(),
+                        direction=signal_type,
+                        price=float(entry),
+                        tp_price=float(tp),
+                        sl_price=float(sl),
+                        lot_size=float(signal.get('lot_size', 0.01)),
+                        confidence_score=float(score) if isinstance(score, (int, float)) else 0.8,
+                        confidence=confidence,
+                        strategy=strategy_name,
+                        status='OPEN' if auto_approved else 'PROPOSED'
+                    )
+                except Exception as db_err:
+                    logger.error(f"[AutoSignals] Error guardando señal en enhanced_signals: {db_err}")
 
                 # Actualizar cooldown — evitar spam del mismo par
                 self._last_signal_time[symbol] = datetime.now(timezone.utc)
@@ -472,14 +515,20 @@ class AutoSignalsService:
                                 f"| Ticket: {exec_result.order_id}",
                                 "INFO", "AUTOSIGNAL"
                             )
+                            # Actualizar estado en DB si se guardó la señal
+                            if saved_signal_id:
+                                try:
+                                    from services.mobile_store import get_mobile_store
+                                    get_mobile_store().update_signal_status(saved_signal_id, 'EXECUTED')
+                                except Exception:
+                                    pass
+
                             # ── Slippage tracking ─────────────────────────────
                             try:
                                 exec_price = exec_result.details.get('mt5_result', {}).get('price', entry) if hasattr(exec_result, 'details') and exec_result.details else entry
                                 if exec_price and entry:
-                                    # Calculate slippage in pips (approximate: 1 pip = 0.0001 for forex, 0.01 for gold)
                                     pip_size = 0.01 if symbol == 'XAUUSD' else (1.0 if symbol == 'BTCEUR' else 0.0001)
                                     slippage_pips = abs(float(exec_price) - float(entry)) / pip_size
-                                    slippage_note = f"Slippage: {slippage_pips:.1f} pips"
                                     log_event(
                                         f"📊 SLIPPAGE {symbol}: entry={entry:.5f} exec={exec_price:.5f} "
                                         f"slippage={slippage_pips:.1f} pips",
@@ -487,15 +536,13 @@ class AutoSignalsService:
                                     )
                             except Exception as slip_err:
                                 logger.debug(f"Slippage tracking error: {slip_err}")
-                                slippage_note = None
 
-                            # ── Trailing stop integration ─────────────────────
+                            # ── Trailing stop integration (desacoplado) ────────
                             try:
-                                import bot as _bot_module
-                                TRAILING_STOPS_AVAILABLE = getattr(_bot_module, 'TRAILING_STOPS_AVAILABLE', False)
-                                trailing_manager = getattr(_bot_module, 'trailing_manager', None)
-                                if TRAILING_STOPS_AVAILABLE and trailing_manager and exec_result.order_id:
-                                    trailing_manager.add_position_to_trail(
+                                from services.trailing_stops import get_trailing_manager
+                                trailing_mgr = get_trailing_manager()
+                                if trailing_mgr and exec_result.order_id:
+                                    trailing_mgr.add_position_to_trail(
                                         ticket=exec_result.order_id,
                                         symbol=symbol,
                                         entry_price=float(entry),
@@ -516,6 +563,30 @@ class AutoSignalsService:
                             )
                     except Exception as exec_err:
                         log_event(f"❌ Error en ejecución real: {exec_err}", "ERROR", "AUTOSIGNAL")
+
+                # ── Notificación Proactiva a Telegram ─────────────────────────
+                try:
+                    tg_token = os.getenv("TELEGRAM_BOT_TOKEN")
+                    tg_chat_id = os.getenv("TELEGRAM_CHAT_ID")
+                    if tg_token and tg_chat_id:
+                        from services.telegram_adapter import TelegramAdapter
+                        tg_adapter = TelegramAdapter(token=tg_token, chat_id=tg_chat_id)
+                        status_label = "✅ EJECUTADA EN MT5" if exec_success else ("🟢 AUTO-APROBADA" if auto_approved else "⏳ REQUIERE APROBACIÓN")
+                        tg_text = (
+                            f"🎯 *SEÑAL {signal_type} {symbol}*\n"
+                            f"━━━━━━━━━━━━━━━━━━\n"
+                            f"📈 *Entrada:* `{entry:.5f}`\n"
+                            f"🛡️ *Stop Loss:* `{sl:.5f}`\n"
+                            f"🎯 *Take Profit:* `{tp:.5f}`\n"
+                            f"⚖️ *R:R Ratio:* `1:{rr_ratio:.2f}`\n"
+                            f"⭐ *Confianza:* *{confidence}* ({score:.2f})\n"
+                            f"⚙️ *Estrategia:* `{strategy_name}`\n"
+                            f"🚀 *Estado:* *{status_label}*\n"
+                            f"⏰ `{datetime.now(timezone.utc).strftime('%H:%M:%S UTC')}`"
+                        )
+                        await tg_adapter.send_message(tg_text)
+                except Exception as tg_err:
+                    logger.debug(f"[AutoSignals] Error enviando alerta Telegram: {tg_err}")
                 
                 return True
                 
@@ -556,8 +627,8 @@ class AutoSignalsService:
         except Exception as e:
             logger.error(f"Error en estadísticas periódicas: {e}")
 
-def create_autosignals_service(bot, state, config):
-    """Factory para crear el servicio de auto-señales"""
+def create_autosignals_service(bot=None, state=None, config=None):
+    """Factory para crear el servicio de auto-señales, soporta modo headless"""
     return AutoSignalsService(bot, state, config)
 
 
