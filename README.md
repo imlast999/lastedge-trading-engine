@@ -15,6 +15,12 @@
 
 ---
 
+> [!NOTE]
+> **Part of the [LastEdge](https://github.com/imlast999/LastEdge) Ecosystem**  
+> This repository is a core component of the **LastEdge** quantitative trading framework. While it is fully capable of standalone operation (e.g. running on a headless VPS), **we strongly recommend running the complete LastEdge suite** via the main orchestrator repository ([`imlast999/LastEdge`](https://github.com/imlast999/LastEdge)) using its automated clone script (`setup.bat` / `clone_repos.bat`) to enable synchronized strategy promotion, real-time dashboard telemetry, and cross-platform controls.
+
+---
+
 ## 1. Overview
 
 **LastEdge Trading Engine** is the high-performance, rock-solid execution core of the LastEdge quantitative platform. It connects directly to MetaTrader 5 (MT5), enforces strict risk boundaries via **Risk Engine v2**, dynamically ingests and verifies cryptographically promoted strategies from Strategy Lab, executes trades with sub-second latency, and exposes a local REST API for telemetry.
@@ -38,6 +44,7 @@ LastEdge is built as a tri-system decoupled architecture. This repository operat
 
 | Repository | Role | Integration Point |
 | :--- | :--- | :--- |
+| 🌐 [**LastEdge (Main Suite)**](https://github.com/imlast999/LastEdge) | Ecosystem Orchestrator & CLI | **Unified Workspace**: Automated setup script (`setup.bat` / `clone_repos.bat`) to synchronize and run the complete three-repository trading suite. |
 | 🔬 [**LastEdge Strategy Lab**](https://github.com/imlast999/lastedge-strategy-lab) | Quantitative Research & Validation | **Strategy Promotion**: Strategy Lab researches and validates candidates (WFA, Monte Carlo, Exit Research) and promotes verified packages (`.py` + `.json`) with `code_sha256` into this engine's `strategies/` directory. |
 | 📱 [**LastEdge App**](https://github.com/imlast999/lastedge-app) | Web Dashboard, Mobile & Bots | **REST Telemetry & Control**: LastEdge App queries this engine's REST API (`http://localhost:8081`) for account equity, active positions, open orders, and risk state. |
 
