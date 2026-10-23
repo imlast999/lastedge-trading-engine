@@ -20,7 +20,7 @@ Symbol mapping:
 
 import logging
 from datetime import datetime, date, timezone, timedelta
-from typing import Tuple, List, Dict, Optional
+from typing import Tuple, List, Dict, Optional, Any
 
 logger = logging.getLogger(__name__)
 
@@ -189,6 +189,42 @@ class NewsFilter:
         except Exception as e:
             logger.warning(f"NewsFilter error for {symbol}: {e}")
             return False, ""
+
+    def get_upcoming_high_impact_events(self, minutes_ahead: int = 120) -> List[Dict[str, Any]]:
+        """
+        Retorna la lista de eventos económicos de alto impacto que se encuentren dentro
+        de la ventana de tiempo (por defecto 120 minutos hacia adelante).
+        Devuelve lista vacía [] si no hay eventos o ante cualquier anomalía.
+        """
+        try:
+            now = datetime.now(timezone.utc)
+            max_future = now + timedelta(minutes=max(1, minutes_ahead))
+            # Monitorear divisas macro clave (USD, EUR)
+            currencies = ['USD', 'EUR']
+            events = self._get_events_near(now, currencies)
+
+            upcoming = []
+            for ev in events:
+                ev_time = ev['time']
+                # Incluir eventos dentro de la ventana de anticipación o en blackout activo
+                if (now - timedelta(minutes=BLACKOUT_MINUTES)) <= ev_time <= max_future:
+                    delta_sec = (ev_time - now).total_seconds()
+                    minutes_until = int(round(delta_sec / 60))
+                    upcoming.append({
+                        'name': ev['name'],
+                        'currency': ev['currency'],
+                        'impact': 'HIGH',
+                        'time': ev_time.isoformat(),
+                        'timestamp': int(ev_time.timestamp()),
+                        'minutes_until': minutes_until,
+                        'is_active_blackout': abs(delta_sec) <= (BLACKOUT_MINUTES * 60),
+                    })
+
+            upcoming.sort(key=lambda x: x['timestamp'])
+            return upcoming
+        except Exception as e:
+            logger.debug("[NewsFilter] Error retrieving upcoming high impact events: %s", e)
+            return []
 
     def _get_events_near(self, now: datetime, currencies: List[str]) -> List[Dict]:
         """

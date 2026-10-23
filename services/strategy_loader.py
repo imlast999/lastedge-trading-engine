@@ -338,15 +338,16 @@ def discover_vault_strategies(vault_dir: Optional[Union[str, Path]] = None) -> D
         if py_path.stem.lower() in discovered:
             continue
 
-        module_name = f"vault_strat_{py_path.stem}"
+        module_name = f"strategies.vault.{py_path.stem}"
         try:
             spec = importlib.util.spec_from_file_location(module_name, py_path)
             if spec is None or spec.loader is None:
                 continue
             mod = importlib.util.module_from_spec(spec)
+            mod.__package__ = "strategies"
             spec.loader.exec_module(mod)
         except Exception as e:
-            logger.error("[StrategyVault] Error loading private strategy from %s: %s", py_path.name, e)
+            logger.debug("[StrategyVault] Error loading private strategy from %s: %s", py_path.name, e)
             continue
 
         # Buscar subclases de BaseStrategy
@@ -420,23 +421,27 @@ def register_vault_strategies(
 
         # 1. Registrar por clave base (ej: 'gold_vault_alpha')
         target_registry[base_key] = cls
-        target_registry[base_key.upper()] = cls
+        if base_key.upper() not in target_registry:
+            target_registry[base_key.upper()] = cls
 
         # 2. Registrar por nombre de estrategia
         target_registry[strat_name.lower()] = cls
-        target_registry[strat_name] = cls
+        if strat_name not in target_registry:
+            target_registry[strat_name] = cls
 
-        # 3. Registrar con prioridad sobre el símbolo (ej: 'XAUUSD', 'EURUSD', 'BTCEUR')
-        target_registry[symbol] = cls
-        target_registry[symbol.lower()] = cls
+        # 3. Registrar por símbolo si no estaba presente
+        if symbol not in target_registry:
+            target_registry[symbol] = cls
+            target_registry[symbol.lower()] = cls
 
         # 4. Sincronizar con services.signals.STRATEGY_REGISTRY si existe
         try:
             import services.signals as _signals_svc
             _signals_svc.register_strategy(base_key, cls)
             _signals_svc.register_strategy(strat_name.lower(), cls)
-            _signals_svc.register_strategy(symbol.lower(), cls)
-            _signals_svc.register_strategy(symbol.upper(), cls)
+            if symbol.lower() not in _signals_svc.STRATEGY_REGISTRY:
+                _signals_svc.register_strategy(symbol.lower(), cls)
+                _signals_svc.register_strategy(symbol.upper(), cls)
         except Exception as _sig_err:
             logger.debug("[StrategyVault] Could not sync with services.signals: %s", _sig_err)
 

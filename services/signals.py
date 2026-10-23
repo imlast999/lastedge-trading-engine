@@ -35,31 +35,35 @@ def reset_strategy_instances() -> None:
 
 
 # Registry de estrategias disponibles
+# Registry de estrategias disponibles
 # rules_config.json usa eurusd_simple, xauusd_simple, btceur_simple → deben estar registradas
 STRATEGY_REGISTRY = {
     'ema50_200':        lambda: get_strategy('EURUSD'),
     'eurusd':           lambda: get_strategy('EURUSD'),
-    'eurusd_partial':   lambda: get_strategy('EURUSD'),          # v1.1 — partial_close (activo)
+    'eurusd_partial':   lambda: _get_eurusd_partial(),           # v1.1 — partial_close (activo)
     'eurusd_simple':    lambda: get_strategy('EURUSD_LEGACY'),   # legacy — referencia histórica
     'eurusd_advanced':  lambda: _get_eurusd_advanced(),
+    'eurusd_flow':      lambda: _get_eurusd_flow(),              # Vault: flujo institucional
     # eurusd_asian_breakout descartada (retest progresivo junio 2026, PF<1.0 en 10k/15k/20k) — ver strategies/experimental/
     'eurusd_asian_breakout': lambda: _get_eurusd_asian_breakout(),   # mantenida para compatibilidad backtest
     # eurusd_mtf descartada (grid search mayo 2026, PF max 0.42) — ver strategies/experimental/
     'eurusd_mtf':       lambda: _get_eurusd_mtf(),   # mantenida para compatibilidad backtest
     'xauusd':           lambda: get_strategy('XAUUSD'),
     'xauusd_simple':    lambda: get_strategy('XAUUSD'),
-    'xauusd_partial':   lambda: get_strategy('XAUUSD'),
+    'xauusd_partial':   lambda: _get_xauusd_partial(),
     'xauusd_advanced':  lambda: _get_xauusd_advanced(),
-    'xauusd_reversal':  lambda: _get_xauusd_reversal(),    # descartada (1 señal/5000v)
+    'xauusd_surge':     lambda: _get_xauusd_surge(),             # Vault: squeeze & breakout
+    'xauusd_reversal':  lambda: _get_xauusd_reversal(),          # descartada (1 señal/5000v)
     'xauusd_momentum':  lambda: _get_xauusd_momentum(),
-    'xauusd_psychological': lambda: _get_xauusd_psychological(),  # descartada (PF max 0.94)
-    'xauusd_gsrs':      lambda: _get_xauusd_gsrs(),         # GSRS experimental (oro, M1)
+    'xauusd_psychological': lambda: _get_xauusd_psychological(), # descartada (PF max 0.94)
+    'xauusd_gsrs':      lambda: _get_xauusd_gsrs(),              # GSRS experimental (oro, M1)
 
     # BTCEUR: todos los alias apuntan a la misma estrategia específica
     'btceur':                lambda: get_strategy('BTCEUR'),
     'btceur_simple':         lambda: get_strategy('BTCEUR'),
-    'btceur_partial':        lambda: get_strategy('BTCEUR'),
+    'btceur_partial':        lambda: _get_btceur_partial(),
     'btceur_advanced':       lambda: get_strategy('BTCEUR'),
+    'btceur_trend_surge':    lambda: _get_btceur_trend_surge(),  # Vault: swing institucional BTC
     'btc_trend_pullback_v1': lambda: _get_btc_trend_pullback(),
     'btceur_weekly_breakout': lambda: _get_btceur_weekly_breakout(),
     # btceur_regime_momentum — reactivada: ahora el ReplayEngine detecta su required_timeframe='H4'
@@ -68,7 +72,105 @@ STRATEGY_REGISTRY = {
     'btc':                   lambda: get_strategy('BTCEUR'),
 }
 
-# ── Helpers para instanciar variantes avanzadas ───────────────────────────────
+# ── Helpers para instanciar variantes avanzadas y estrategias del Vault ───────
+
+def _get_eurusd_partial():
+    try:
+        from strategies.eurusd import EURUSDPartialStrategy
+        return EURUSDPartialStrategy()
+    except Exception as e:
+        logger.warning(f"EURUSDPartialStrategy no disponible: {e}")
+        return get_strategy('EURUSD')
+
+def _get_xauusd_partial():
+    try:
+        from strategies.xauusd_partial import XAUUSDPartialStrategy
+        return XAUUSDPartialStrategy()
+    except Exception as e:
+        logger.warning(f"XAUUSDPartialStrategy no disponible: {e}")
+        return get_strategy('XAUUSD')
+
+def _get_btceur_partial():
+    try:
+        from strategies.btceur_partial import BTCEURPartialStrategy
+        return BTCEURPartialStrategy()
+    except Exception as e:
+        logger.warning(f"BTCEURPartialStrategy no disponible: {e}")
+        return get_strategy('BTCEUR')
+
+def _get_btceur_trend_surge():
+    try:
+        from strategies.vault.btceur_trend_surge import BTCEURTrendSurgeStrategy
+        return BTCEURTrendSurgeStrategy()
+    except Exception as e:
+        logger.warning(f"BTCEURTrendSurgeStrategy no disponible en vault: {e}")
+        return get_strategy('BTCEUR')
+
+def _get_xauusd_surge():
+    try:
+        from strategies.vault.xauusd_surge import XAUUSDSurgeStrategy
+        return XAUUSDSurgeStrategy()
+    except Exception as e:
+        logger.warning(f"XAUUSDSurgeStrategy no disponible en vault: {e}")
+        return get_strategy('XAUUSD')
+
+def _get_eurusd_flow():
+    try:
+        from strategies.vault.eurusd_flow import EURUSDFlowStrategy
+        return EURUSDFlowStrategy()
+    except Exception as e:
+        logger.warning(f"EURUSDFlowStrategy no disponible en vault: {e}")
+        return get_strategy('EURUSD')
+
+def is_valid_btceur_strategy(strategy_instance: object) -> bool:
+    """
+    Valida si una instancia de estrategia es adecuada para BTCEUR:
+    1. Si su nombre de clase está en la tupla de clases válidas conocidas
+       ('BTCEURStrategy', 'BTCEURPartialStrategy', 'BTCTrendPullbackV1Strategy',
+        'BTCEURWeeklyBreakoutStrategy', 'BTCEURRegimeMomentumStrategy', 'BTCEURTrendSurgeStrategy').
+    2. O si hereda de BaseStrategy y sus metadatos (metadata.symbol) especifican 'BTCEUR'.
+    3. O si proviene dinámicamente de strategies.vault (o módulo con prefijo vault_strat_*),
+       asegurando que no pertenezca a otros símbolos (ej. EURUSD o XAUUSD).
+    """
+    if strategy_instance is None:
+        return False
+
+    cls_name = strategy_instance.__class__.__name__
+    valid_btceur_classes = (
+        'BTCEURStrategy',
+        'BTCEURPartialStrategy',
+        'BTCTrendPullbackV1Strategy',
+        'BTCEURWeeklyBreakoutStrategy',
+        'BTCEURRegimeMomentumStrategy',
+        'BTCEURTrendSurgeStrategy',
+    )
+    if cls_name in valid_btceur_classes:
+        return True
+
+    # 2. Comprobación por BaseStrategy y metadata.symbol o self.symbol
+    try:
+        from strategies.base import BaseStrategy
+        if isinstance(strategy_instance, BaseStrategy):
+            strat_sym = None
+            if hasattr(strategy_instance, 'metadata') and strategy_instance.metadata:
+                strat_sym = getattr(strategy_instance.metadata, 'symbol', None)
+            if not strat_sym and hasattr(strategy_instance, 'symbol'):
+                strat_sym = getattr(strategy_instance, 'symbol', None)
+
+            if strat_sym and str(strat_sym).upper() in ('BTCEUR', 'BTC', 'BTCUSD', 'BTC/EUR'):
+                return True
+    except Exception as e:
+        logger.debug(f"[BTCEUR] Error verificando BaseStrategy metadata: {e}")
+
+    # 3. Comprobación por origen dinámico en Vault
+    mod_name = strategy_instance.__class__.__module__ or ""
+    if "vault" in mod_name.lower():
+        upper_cls = cls_name.upper()
+        if "EURUSD" not in upper_cls and "XAUUSD" not in upper_cls:
+            return True
+
+    return False
+
 
 def _get_btc_trend_pullback():
     try:
@@ -247,7 +349,7 @@ def detect_signal(
         if symbol and symbol.upper() == 'BTCEUR':
             logger.debug(f"[BTCEUR] Strategy instance: {strategy_instance.__class__.__name__} from {strategy_instance.__class__.__module__}")
         
-        # Verificación estricta para BTCEUR: la clase debe ser BTCEURStrategy
+        # Verificación estricta y flexible para BTCEUR: evitar estrategias incompatibles (ej. Forex por defecto)
         if symbol and symbol.upper() == 'BTCEUR':
             if strategy_instance is None:
                 err_msg = "get_strategy('BTCEUR') devolvió None."
@@ -255,11 +357,16 @@ def detect_signal(
                 set_btceur_health(status="ERROR", last_error=err_msg)
                 return None, df
             cls_name = strategy_instance.__class__.__name__
-            # Clases válidas para BTCEUR: BTCEURStrategy (baseline), BTCTrendPullbackV1Strategy,
-            # BTCEURWeeklyBreakoutStrategy, BTCEURRegimeMomentumStrategy.
-            valid_btceur_classes = ('BTCEURStrategy', 'BTCEURPartialStrategy', 'BTCTrendPullbackV1Strategy', 'BTCEURWeeklyBreakoutStrategy', 'BTCEURRegimeMomentumStrategy')
-            if cls_name not in valid_btceur_classes:
-                err_msg = f"Estrategia incorrecta: {cls_name} (válidas: {valid_btceur_classes})."
+            if not is_valid_btceur_strategy(strategy_instance):
+                valid_btceur_classes = (
+                    'BTCEURStrategy',
+                    'BTCEURPartialStrategy',
+                    'BTCTrendPullbackV1Strategy',
+                    'BTCEURWeeklyBreakoutStrategy',
+                    'BTCEURRegimeMomentumStrategy',
+                    'BTCEURTrendSurgeStrategy',
+                )
+                err_msg = f"Estrategia incorrecta: {cls_name} (válidas: {valid_btceur_classes} o Vault BTCEUR)."
                 logger.error("[CRITICAL][BTCEUR] %s Abortando detección.", err_msg)
                 set_btceur_health(status="ERROR", last_error=err_msg)
                 return None, df

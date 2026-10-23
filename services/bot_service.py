@@ -497,10 +497,12 @@ class BotService:
         try:
             from services.news_filter import NewsFilter
             nf = NewsFilter()
-            events = nf.get_upcoming_high_impact_events()
-            return events if isinstance(events, list) else []
+            if hasattr(nf, 'get_upcoming_high_impact_events'):
+                events = nf.get_upcoming_high_impact_events()
+                return events if isinstance(events, list) else []
+            return []
         except Exception as e:
-            logger.error(f"Error fetching news in BotService: {e}")
+            logger.debug(f"Error fetching news in BotService: {e}")
             return []
 
     # ── 8. Control de Autosignals & Config ────────────────────────────────────
