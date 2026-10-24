@@ -9,6 +9,7 @@ from __future__ import annotations
 import os
 import unittest
 import tempfile
+from unittest.mock import MagicMock, patch
 from services.database import get_database_manager
 from services.production_verifier import ProductionVerifierService, get_production_verifier_service
 from services.bot_service import BotService
@@ -53,9 +54,32 @@ class TestP52ProductionVerifier(unittest.TestCase):
         for name in expected_names:
             self.assertIn(name, actual_names)
 
+        subsystem_dict = {s["subsystem"]: s for s in subsystems}
+        # Database must be VERIFIED with real temporary db
+        self.assertEqual(subsystem_dict["Database"]["status"], "VERIFIED")
         for s in subsystems:
-            self.assertIn(s["status"], ["VERIFIED", "DEGRADED", "FAILED"])
             self.assertGreaterEqual(s["latency_ms"], 0.0)
+
+    @patch("MetaTrader5.terminal_info")
+    def test_verify_mt5_connected(self, mock_terminal_info):
+        mock_info = MagicMock()
+        mock_info.connected = True
+        mock_info.ping_last = 12
+        mock_terminal_info.return_value = mock_info
+
+        res = self.verifier_svc._verify_mt5(bot_service=None)
+        self.assertEqual(res["status"], "VERIFIED")
+        self.assertIn("Terminal activo", res["details"])
+
+    @patch("MetaTrader5.terminal_info")
+    def test_verify_mt5_disconnected_failed(self, mock_terminal_info):
+        mock_terminal_info.return_value = None
+        bot_svc = MagicMock()
+        bot_svc.mt5_client = None
+
+        res = self.verifier_svc._verify_mt5(bot_service=bot_svc)
+        self.assertEqual(res["status"], "FAILED")
+        self.assertIn("no detectado", res["details"])
 
     def test_bot_service_verification_integration(self):
         bot_svc = BotService()

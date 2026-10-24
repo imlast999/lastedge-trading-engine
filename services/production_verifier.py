@@ -140,25 +140,25 @@ class ProductionVerifierService:
             elif info is not None:
                 return {
                     "subsystem": "MT5",
-                    "status": "DEGRADED",
+                    "status": "FAILED",
                     "latency_ms": round((time.perf_counter() - t0) * 1000, 2),
                     "details": "Terminal MT5 abierto pero deshabilitado / desconectado del bróker.",
                 }
             else:
                 mt5_client = getattr(bot_service, "mt5_client", None) if bot_service else None
-                is_demo = getattr(mt5_client, "demo_mode", False) if mt5_client else True
+                is_paper = bool(mt5_client and getattr(mt5_client, "demo_mode", False))
                 return {
                     "subsystem": "MT5",
-                    "status": "VERIFIED" if is_demo else "FAILED",
+                    "status": "DEGRADED" if is_paper else "FAILED",
                     "latency_ms": round((time.perf_counter() - t0) * 1000, 2),
-                    "details": "Modo Simulación / Paper Activo (Sin terminal MT5 físico)." if is_demo else "MT5 no detectado.",
+                    "details": "Modo Simulación / Paper Activo (Sin terminal MT5 físico)." if is_paper else "Terminal MT5 no detectado o desconectado.",
                 }
         except Exception as e:
             return {
                 "subsystem": "MT5",
-                "status": "DEGRADED",
+                "status": "FAILED",
                 "latency_ms": round((time.perf_counter() - t0) * 1000, 2),
-                "details": f"Modo de prueba activo: {e}",
+                "details": f"Error verificando MT5: {e}",
             }
 
     # ── 3. Risk Engine Subsystem ───────────────────────────────────────────────
