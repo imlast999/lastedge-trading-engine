@@ -298,14 +298,16 @@ class AutoSignalsService:
                 return False
             
             # Obtener datos de mercado
-            # 210 velas mínimo para que EMA200 esté disponible en todas las estrategias
+            # Garantizar historial suficiente para estrategias macro H4/H1 (BTCEUR requiere >= 850)
             try:
-                df = await engine.get_market_data(symbol, timeframe='H1', count=250)
+                required_count = 1000 if symbol.upper() == 'BTCEUR' else 300
+                min_candles = 850 if symbol.upper() == 'BTCEUR' else 210
+                df = await engine.get_market_data(symbol, timeframe='H1', count=required_count)
                 if df is None or len(df) == 0:
                     return False
-                if len(df) < 210:
+                if len(df) < min_candles:
                     if self.scan_count % 20 == 1:
-                        log_event(f"⚠️ {symbol}: solo {len(df)} velas disponibles (mínimo 210)", "WARNING", "AUTOSIGNAL")
+                        log_event(f"⚠️ {symbol}: solo {len(df)} velas disponibles (mínimo {min_candles})", "WARNING", "AUTOSIGNAL")
                     return False
             except Exception as e:
                 if self.scan_count % 50 == 1:
@@ -402,34 +404,40 @@ class AutoSignalsService:
                 # Determinar si es auto-aprobada (HIGH o VERY_HIGH)
                 auto_approved = confidence in ['HIGH', 'VERY_HIGH']
                 
-                # Crear embed de señal
-                embed_color = 0x00ff00 if signal_type == 'BUY' else 0xff0000
-                if auto_approved:
-                    embed_color = 0xFFD700  # Dorado para señales auto-aprobadas
-                
-                embed = discord.Embed(
-                    title=f"{'⭐ ' if auto_approved else ''}🎯 {signal_type} {symbol}",
-                    description="✅ AUTO-APROBADA" if auto_approved else "⏳ Requiere aprobación manual",
-                    color=embed_color,
-                    timestamp=datetime.now(timezone.utc)
-                )
-                
-                embed.add_field(name="📈 Entry", value=f"{entry:.5f}", inline=True)
-                embed.add_field(name="🛡️ Stop Loss", value=f"{sl:.5f}", inline=True)
-                embed.add_field(name="🎯 Take Profit", value=f"{tp:.5f}", inline=True)
-                embed.add_field(name="⭐ Confidence", value=confidence, inline=True)
-                embed.add_field(name="📊 Score", value=f"{score:.2f}", inline=True)
-                
                 # Calcular R:R ratio
                 risk = abs(entry - sl)
                 reward = abs(tp - entry)
                 rr_ratio = reward / risk if risk > 0 else 0
+
+                # Crear embed de señal
+                if auto_approved:
+                    embed_color = 0xFFD700  # Dorado para señales auto-aprobadas
+                    embed = discord.Embed(
+                        title=f"⭐ 🎯 {signal_type} {symbol}",
+                        description="✅ AUTO-APROBADA",
+                        color=embed_color,
+                        timestamp=datetime.now(timezone.utc)
+                    )
+                else:
+                    embed_color = 0xFFA500  # Ámbar/dorado para señales pendientes de confirmación
+                    embed = discord.Embed(
+                        title=f"⏸️ SEÑAL PENDIENTE DE CONFIRMACIÓN | {signal_type} {symbol}",
+                        description="👉 Pulsa \"Aprobar\" en tu Web Dashboard para ejecutarla en MT5.",
+                        color=embed_color,
+                        timestamp=datetime.now(timezone.utc)
+                    )
+                
+                embed.add_field(name="📈 Entry", value=f"{entry:.5f}", inline=True)
+                embed.add_field(name="🛡️ Stop Loss", value=f"{sl:.5f}", inline=True)
+                embed.add_field(name="🎯 Take Profit", value=f"{tp:.5f}", inline=True)
                 embed.add_field(name="⚖️ R:R Ratio", value=f"1:{rr_ratio:.2f}", inline=True)
+                embed.add_field(name="⭐ Confidence", value=confidence, inline=True)
+                embed.add_field(name="⚙️ Strategy", value=strategy_name, inline=True)
                 
                 if auto_approved:
                     embed.set_footer(text="Auto-Signal System | AUTO-APROBADA ✅")
                 else:
-                    embed.set_footer(text="Auto-Signal System | Requiere aprobación manual")
+                    embed.set_footer(text="Aprobación requerida vía Dashboard")
                 
                 # Generar gráfico con la señal si Discord está conectado
                 if channel:
@@ -571,19 +579,31 @@ class AutoSignalsService:
                     if tg_token and tg_chat_id:
                         from services.telegram_adapter import TelegramAdapter
                         tg_adapter = TelegramAdapter(token=tg_token, chat_id=tg_chat_id)
-                        status_label = "✅ EJECUTADA EN MT5" if exec_success else ("🟢 AUTO-APROBADA" if auto_approved else "⏳ REQUIERE APROBACIÓN")
-                        tg_text = (
-                            f"🎯 *SEÑAL {signal_type} {symbol}*\n"
-                            f"━━━━━━━━━━━━━━━━━━\n"
-                            f"📈 *Entrada:* `{entry:.5f}`\n"
-                            f"🛡️ *Stop Loss:* `{sl:.5f}`\n"
-                            f"🎯 *Take Profit:* `{tp:.5f}`\n"
-                            f"⚖️ *R:R Ratio:* `1:{rr_ratio:.2f}`\n"
-                            f"⭐ *Confianza:* *{confidence}* ({score:.2f})\n"
-                            f"⚙️ *Estrategia:* `{strategy_name}`\n"
-                            f"🚀 *Estado:* *{status_label}*\n"
-                            f"⏰ `{datetime.now(timezone.utc).strftime('%H:%M:%S UTC')}`"
-                        )
+                        if not auto_approved:
+                            tg_text = (
+                                "⏸️ *SEÑAL PENDIENTE DE CONFIRMACIÓN*\n"
+                                "━━━━━━━━━━━━━━━━━━\n"
+                                f"Par: {symbol} | Dirección: {signal_type}\n"
+                                f"Precio: {entry:.5f}\n"
+                                f"SL: {sl:.5f} | TP: {tp:.5f} | R:R: 1:{rr_ratio:.2f}\n"
+                                f"Confianza: {confidence} | Estrategia: {strategy_name}\n"
+                                "━━━━━━━━━━━━━━━━━━\n"
+                                "👉 Pulsa \"Aprobar\" en tu Web Dashboard para ejecutarla en MT5."
+                            )
+                        else:
+                            status_label = "✅ EJECUTADA EN MT5" if exec_success else "🟢 AUTO-APROBADA"
+                            tg_text = (
+                                f"🎯 *SEÑAL {signal_type} {symbol}*\n"
+                                f"━━━━━━━━━━━━━━━━━━\n"
+                                f"📈 *Entrada:* `{entry:.5f}`\n"
+                                f"🛡️ *Stop Loss:* `{sl:.5f}`\n"
+                                f"🎯 *Take Profit:* `{tp:.5f}`\n"
+                                f"⚖️ *R:R Ratio:* `1:{rr_ratio:.2f}`\n"
+                                f"⭐ *Confianza:* *{confidence}* ({score:.2f})\n"
+                                f"⚙️ *Estrategia:* `{strategy_name}`\n"
+                                f"🚀 *Estado:* *{status_label}*\n"
+                                f"⏰ `{datetime.now(timezone.utc).strftime('%H:%M:%S UTC')}`"
+                            )
                         await tg_adapter.send_message(tg_text)
                 except Exception as tg_err:
                     logger.debug(f"[AutoSignals] Error enviando alerta Telegram: {tg_err}")

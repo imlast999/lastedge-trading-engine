@@ -432,6 +432,112 @@ class BotService:
             logger.error(f"Error fetching signal history in BotService: {e}")
         return signals
 
+    def approve_signal(self, signal_id: int) -> Dict[str, Any]:
+        """
+        Aprueba y ejecuta manualmente una señal en estado PROPOSED.
+        Recupera la señal desde enhanced_signals, ejecuta en MT5 vía ExecutionService,
+        actualiza el estado a EXECUTED, registra en TrailingStopManager y retorna el ticket.
+        """
+        try:
+            from services.database import get_database_manager
+            db_mgr = get_database_manager()
+            row = None
+            with db_mgr.get_connection() as conn:
+                row = conn.execute(
+                    """SELECT id, symbol, direction, signal_type, strategy, price, entry_price,
+                              sl_price, tp_price, score, confidence_level, confidence_score, lot_size, status
+                       FROM enhanced_signals
+                       WHERE id = ?""",
+                    (signal_id,)
+                ).fetchone()
+
+            if not row:
+                return {"ok": False, "error": f"Señal {signal_id} no encontrada en enhanced_signals."}
+
+            current_status = (row["status"] or "").upper()
+            if current_status == "EXECUTED":
+                return {"ok": False, "error": f"La señal {signal_id} ya fue ejecutada previamente."}
+
+            symbol = row["symbol"]
+            signal_type = (row["direction"] or row["signal_type"] or "BUY").upper()
+            entry_price = float(row["entry_price"] or row["price"] or 0.0)
+            sl_price = float(row["sl_price"] or 0.0)
+            tp_price = float(row["tp_price"] or 0.0)
+            lot_size = float(row["lot_size"] or 0.01)
+            strategy = row["strategy"] or "ManualApprove"
+            score = float(row["score"] or 0.0)
+            confidence = row["confidence_level"] if "confidence_level" in row.keys() else "MEDIUM"
+
+            signal_payload = {
+                "symbol": symbol,
+                "type": signal_type,
+                "entry": entry_price,
+                "sl": sl_price,
+                "tp": tp_price,
+                "lot_size": lot_size,
+                "strategy_used": strategy,
+                "score": score,
+                "confidence": confidence,
+                "force_execute": True,
+            }
+
+            from services.execution import get_execution_service
+            exec_svc = get_execution_service()
+            exec_result = exec_svc.execute_signal(signal_payload)
+
+            if exec_result.success:
+                order_id = exec_result.order_id
+                # Actualizar estado a EXECUTED
+                with db_mgr.get_connection() as conn:
+                    cols = {r[1] for r in conn.execute("PRAGMA table_info(enhanced_signals)")}
+                    if "mt5_ticket" not in cols:
+                        try:
+                            conn.execute("ALTER TABLE enhanced_signals ADD COLUMN mt5_ticket INTEGER")
+                        except Exception:
+                            pass
+                    conn.execute(
+                        """UPDATE enhanced_signals
+                           SET status='EXECUTED', executed=1, mobile_processed=1, mt5_ticket=?
+                           WHERE id=?""",
+                        (order_id, signal_id)
+                    )
+
+                # Registrar trailing stop si está disponible
+                try:
+                    from services.trailing_stops import get_trailing_manager
+                    trailing_mgr = get_trailing_manager()
+                    if trailing_mgr and order_id:
+                        trailing_mgr.add_position_to_trail(
+                            ticket=order_id,
+                            symbol=symbol,
+                            entry_price=entry_price,
+                            original_sl=sl_price,
+                            original_tp=tp_price,
+                            trade_type=signal_type
+                        )
+                except Exception as trail_err:
+                    logger.debug(f"[ApproveSignal] Trailing stop setup warning: {trail_err}")
+
+                logger.info(f"✅ [ApproveSignal] Señal {signal_id} ({symbol} {signal_type}) aprobada y ejecutada en MT5. Ticket: {order_id}")
+                return {
+                    "ok": True,
+                    "message": f"Señal {signal_id} aprobada y ejecutada en MT5 exitosamente.",
+                    "ticket": order_id,
+                    "signal_id": signal_id,
+                    "symbol": symbol,
+                    "type": signal_type
+                }
+            else:
+                logger.warning(f"❌ [ApproveSignal] Fallo al ejecutar señal {signal_id}: {exec_result.message}")
+                return {
+                    "ok": False,
+                    "error": exec_result.message or "Error ejecutando la orden en MT5",
+                    "signal_id": signal_id
+                }
+        except Exception as e:
+            logger.error(f"[ApproveSignal] Excepción aprobando señal {signal_id}: {e}", exc_info=True)
+            return {"ok": False, "error": str(e), "signal_id": signal_id}
+
     # ── 5. Journal & Calidad de Ejecución ─────────────────────────────────────
 
     def get_journal_summary(self, days: int = 30) -> Dict[str, Any]:

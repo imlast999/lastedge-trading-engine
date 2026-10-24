@@ -211,6 +211,19 @@ class TradingAPIHandler(BaseHTTPRequestHandler):
                 res = get_bot_service().toggle_autosignals(mode=mode)
                 self._send_json(200, res)
 
+            elif path in ("/api/trading/signals/approve", "/api/signals/approve") or (path.startswith("/api/signals/") and path.endswith("/approve")):
+                signal_id = payload.get("signal_id") or payload.get("id")
+                if not signal_id and path.startswith("/api/signals/"):
+                    parts = path.split("/")
+                    if len(parts) > 3 and parts[3] != "approve":
+                        signal_id = parts[3]
+                if not signal_id:
+                    self._send_json(400, {"ok": False, "error": "Missing 'signal_id' in request body."})
+                    return
+                from services.bot_service import get_bot_service
+                res = get_bot_service().approve_signal(int(signal_id))
+                self._send_json(200 if res.get("ok") else 400, res)
+
             else:
                 self._send_json(404, {"ok": False, "error": f"POST endpoint '{self.path}' not found."})
         except Exception as e:
