@@ -213,6 +213,7 @@ class TradingAPIHandler(BaseHTTPRequestHandler):
 
             elif path in ("/api/trading/signals/approve", "/api/signals/approve") or (path.startswith("/api/signals/") and path.endswith("/approve")):
                 signal_id = payload.get("signal_id") or payload.get("id")
+                force = bool(payload.get("force", False))
                 if not signal_id and path.startswith("/api/signals/"):
                     parts = path.split("/")
                     if len(parts) > 3 and parts[3] != "approve":
@@ -221,8 +222,23 @@ class TradingAPIHandler(BaseHTTPRequestHandler):
                     self._send_json(400, {"ok": False, "error": "Missing 'signal_id' in request body."})
                     return
                 from services.bot_service import get_bot_service
-                res = get_bot_service().approve_signal(int(signal_id))
+                res = get_bot_service().approve_signal(int(signal_id), force=force)
+                status_code = 200 if (res.get("ok") or res.get("error") == "PRICE_DRIFT") else 400
+                self._send_json(status_code, res)
+
+            elif path in ("/api/trading/signals/reject", "/api/signals/reject") or (path.startswith("/api/signals/") and path.endswith("/reject")):
+                signal_id = payload.get("signal_id") or payload.get("id")
+                if not signal_id and path.startswith("/api/signals/"):
+                    parts = path.split("/")
+                    if len(parts) > 3 and parts[3] != "reject":
+                        signal_id = parts[3]
+                if not signal_id:
+                    self._send_json(400, {"ok": False, "error": "Missing 'signal_id' in request body."})
+                    return
+                from services.bot_service import get_bot_service
+                res = get_bot_service().reject_signal(int(signal_id))
                 self._send_json(200 if res.get("ok") else 400, res)
+
 
             else:
                 self._send_json(404, {"ok": False, "error": f"POST endpoint '{self.path}' not found."})

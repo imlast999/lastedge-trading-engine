@@ -26,7 +26,6 @@ class AutoSignalsService:
         self.state = state
 
         if config is None:
-            import os
             symbols_str = os.getenv("AUTOSIGNAL_SYMBOLS", "EURUSD,XAUUSD,BTCEUR")
             symbols = [s.strip() for s in symbols_str.split(",") if s.strip()]
             config = {
@@ -248,9 +247,61 @@ class AutoSignalsService:
                 else:
                     await asyncio.sleep(30)
     
+    def _check_expired_signals(self) -> int:
+        """
+        Comprueba señales en enhanced_signals con estado 'PROPOSED'.
+        Si (now - created_at) > 10 minutos (600s), marca automáticamente su estado como 'EXPIRED'.
+        Registra evento informativo: [AutoSignals] Señal #{id} ({symbol}) expirada tras 10 min sin confirmación.
+        """
+        try:
+            from services.database import get_database_manager
+            from services.logging import log_event
+            db_mgr = get_database_manager()
+            now_utc = datetime.now(timezone.utc)
+            expired_count = 0
+            with db_mgr.get_connection() as conn:
+                rows = conn.execute(
+                    """SELECT id, symbol, created_at, timestamp, status
+                       FROM enhanced_signals
+                       WHERE status = 'PROPOSED'"""
+                ).fetchall()
+
+                for row in rows:
+                    sig_id = row["id"]
+                    symbol = row["symbol"]
+                    raw_time = row["created_at"] or row["timestamp"]
+                    if not raw_time:
+                        continue
+                    try:
+                        clean_time = str(raw_time).strip().replace("Z", "+00:00")
+                        created_dt = datetime.fromisoformat(clean_time)
+                        if created_dt.tzinfo is None:
+                            created_dt = created_dt.replace(tzinfo=timezone.utc)
+                        age_seconds = (now_utc - created_dt).total_seconds()
+                    except Exception:
+                        continue
+
+                    if age_seconds > 600:
+                        conn.execute(
+                            "UPDATE enhanced_signals SET status = 'EXPIRED' WHERE id = ?",
+                            (sig_id,)
+                        )
+                        expired_count += 1
+                        msg = f"[AutoSignals] Señal #{sig_id} ({symbol}) expirada tras 10 min sin confirmación"
+                        logger.info(f"⏳ {msg}")
+                        log_event(msg, "INFO", "AUTOSIGNAL")
+
+            return expired_count
+        except Exception as e:
+            logger.debug(f"[AutoSignals] Error comprobando señales expiradas: {e}")
+            return 0
+
     async def _scan_symbols(self):
         """Escanea todos los símbolos configurados"""
         from services.logging import log_event
+
+        # Comprobar y expirar automáticamente señales pendientes con TTL > 10 min
+        self._check_expired_signals()
 
         # Update last scan time for watchdog
         self.last_scan_time = datetime.now(timezone.utc)

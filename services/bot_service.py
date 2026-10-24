@@ -432,11 +432,27 @@ class BotService:
             logger.error(f"Error fetching signal history in BotService: {e}")
         return signals
 
-    def approve_signal(self, signal_id: int) -> Dict[str, Any]:
+    def _get_drift_threshold(self, symbol: str, entry_price: float) -> tuple[float, str]:
+        """Calcula el umbral máximo de desviación y la unidad de visualización para un símbolo."""
+        sym = (symbol or "").upper()
+        if "EURUSD" in sym:
+            return 0.00018, "pips"
+        elif "XAUUSD" in sym or "GOLD" in sym:
+            return 1.20, "usd"
+        elif "BTC" in sym:
+            base = entry_price if entry_price > 0 else 1.0
+            return 0.0010 * base, "percent"
+        else:
+            # Fallback forex estándar: 1.8 pips
+            return 0.00018, "pips"
+
+    def approve_signal(self, signal_id: int, force: bool = False) -> Dict[str, Any]:
         """
-        Aprueba y ejecuta manualmente una señal en estado PROPOSED.
-        Recupera la señal desde enhanced_signals, ejecuta en MT5 vía ExecutionService,
-        actualiza el estado a EXECUTED, registra en TrailingStopManager y retorna el ticket.
+        Aprueba y ejecuta manualmente una señal en estado PROPOSED con Slippage Guard.
+        - Si force == False y |precio_actual - precio_señal| > umbral:
+            Retorna { ok: False, error: 'PRICE_DRIFT', signal_price, current_price, drift_pips }
+        - Si está dentro del margen O force == True:
+            Ejecuta en MT5 vía ExecutionService, actualiza estado a EXECUTED y retorna ticket y executed_price.
         """
         try:
             from services.database import get_database_manager
@@ -468,10 +484,50 @@ class BotService:
             score = float(row["score"] or 0.0)
             confidence = row["confidence_level"] if "confidence_level" in row.keys() else "MEDIUM"
 
+            # ── Slippage Guard: Obtener precio en vivo desde MT5 ───────────────
+            live_price = entry_price
+            try:
+                tick = mt5.symbol_info_tick(symbol)
+                if tick is not None:
+                    live_price = float(tick.ask) if signal_type == "BUY" else float(tick.bid)
+            except Exception as tick_err:
+                logger.debug(f"[ApproveSignal] No se pudo obtener tick en vivo para {symbol}: {tick_err}")
+
+            max_drift, unit = self._get_drift_threshold(symbol, entry_price)
+            diff = abs(live_price - entry_price)
+
+            if unit == "pips":
+                drift_display = f"{diff / 0.0001:.1f} pips"
+            elif unit == "usd":
+                drift_display = f"${diff:.2f}"
+            elif unit == "percent":
+                drift_display = f"{(diff / (entry_price or 1.0) * 100):.2f}%"
+            else:
+                drift_display = f"{diff:.5f}"
+
+            # Si se supera el umbral y force es False, solicitar doble confirmación
+            if not force and diff > max_drift:
+                logger.warning(
+                    f"⚠️ [SlippageGuard] Desviación detectada en señal #{signal_id} ({symbol}): "
+                    f"señal={entry_price}, actual={live_price}, drift={drift_display} > {max_drift}"
+                )
+                return {
+                    "ok": False,
+                    "error": "PRICE_DRIFT",
+                    "signal_id": signal_id,
+                    "symbol": symbol,
+                    "signal_price": entry_price,
+                    "current_price": live_price,
+                    "drift_pips": drift_display,
+                    "diff": diff,
+                    "message": f"El precio actual ({live_price}) se ha desviado de la señal ({entry_price}) en {drift_display}."
+                }
+
+            # Ejecutar a mercado con el precio actual
             signal_payload = {
                 "symbol": symbol,
                 "type": signal_type,
-                "entry": entry_price,
+                "entry": live_price if live_price > 0 else entry_price,
                 "sl": sl_price,
                 "tp": tp_price,
                 "lot_size": lot_size,
@@ -487,7 +543,7 @@ class BotService:
 
             if exec_result.success:
                 order_id = exec_result.order_id
-                # Actualizar estado a EXECUTED
+                # Actualizar estado a EXECUTED y guardar ticket MT5
                 with db_mgr.get_connection() as conn:
                     cols = {r[1] for r in conn.execute("PRAGMA table_info(enhanced_signals)")}
                     if "mt5_ticket" not in cols:
@@ -510,7 +566,7 @@ class BotService:
                         trailing_mgr.add_position_to_trail(
                             ticket=order_id,
                             symbol=symbol,
-                            entry_price=entry_price,
+                            entry_price=live_price,
                             original_sl=sl_price,
                             original_tp=tp_price,
                             trade_type=signal_type
@@ -518,14 +574,15 @@ class BotService:
                 except Exception as trail_err:
                     logger.debug(f"[ApproveSignal] Trailing stop setup warning: {trail_err}")
 
-                logger.info(f"✅ [ApproveSignal] Señal {signal_id} ({symbol} {signal_type}) aprobada y ejecutada en MT5. Ticket: {order_id}")
+                logger.info(f"✅ [ApproveSignal] Señal #{signal_id} ({symbol} {signal_type}) ejecutada en MT5. Ticket: {order_id} @ {live_price}")
                 return {
                     "ok": True,
                     "message": f"Señal {signal_id} aprobada y ejecutada en MT5 exitosamente.",
                     "ticket": order_id,
                     "signal_id": signal_id,
                     "symbol": symbol,
-                    "type": signal_type
+                    "type": signal_type,
+                    "executed_price": live_price
                 }
             else:
                 logger.warning(f"❌ [ApproveSignal] Fallo al ejecutar señal {signal_id}: {exec_result.message}")
@@ -537,6 +594,42 @@ class BotService:
         except Exception as e:
             logger.error(f"[ApproveSignal] Excepción aprobando señal {signal_id}: {e}", exc_info=True)
             return {"ok": False, "error": str(e), "signal_id": signal_id}
+
+    def reject_signal(self, signal_id: int) -> Dict[str, Any]:
+        """
+        Descarta manualmente una señal en estado PROPOSED.
+        Actualiza el estado en enhanced_signals a REJECTED_MANUAL y marca rejected=1.
+        """
+        try:
+            from services.database import get_database_manager
+            db_mgr = get_database_manager()
+            with db_mgr.get_connection() as conn:
+                row = conn.execute(
+                    "SELECT id, symbol, status FROM enhanced_signals WHERE id = ?",
+                    (signal_id,)
+                ).fetchone()
+
+                if not row:
+                    return {"ok": False, "error": f"Señal #{signal_id} no encontrada en enhanced_signals."}
+
+                conn.execute(
+                    """UPDATE enhanced_signals
+                       SET status='REJECTED_MANUAL', rejected=1, mobile_processed=1
+                       WHERE id=?""",
+                    (signal_id,)
+                )
+
+            logger.info(f"🚫 [RejectSignal] Señal #{signal_id} ({row['symbol']}) descartada manualmente.")
+            return {
+                "ok": True,
+                "status": "REJECTED_MANUAL",
+                "signal_id": signal_id,
+                "message": f"Señal #{signal_id} descartada correctamente."
+            }
+        except Exception as e:
+            logger.error(f"[RejectSignal] Error descartando señal #{signal_id}: {e}", exc_info=True)
+            return {"ok": False, "error": str(e), "signal_id": signal_id}
+
 
     # ── 5. Journal & Calidad de Ejecución ─────────────────────────────────────
 
