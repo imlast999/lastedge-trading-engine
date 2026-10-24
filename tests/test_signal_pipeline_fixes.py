@@ -4,6 +4,8 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, timezone
 
+import tempfile
+
 from core.engine import get_trading_engine, BotState
 from services.mobile_store import get_mobile_store
 from services.autosignals import create_autosignals_service, AutoSignalsService
@@ -43,24 +45,33 @@ class TestSignalPipelineFixes(unittest.TestCase):
 
     def test_mobile_store_insert_signal_auto_session(self):
         """Verify MobileStore.insert_signal auto-starts session and inserts into enhanced_signals"""
-        store = get_mobile_store()
-        store._session_id = None  # Force uninitialized session
+        tmp_db = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+        tmp_db.close()
+        try:
+            store = get_mobile_store(db_path=tmp_db.name)
+            store.ensure_tables()
+            store._session_id = None  # Force uninitialized session
 
-        sig_id = store.insert_signal(
-            symbol="EURUSD",
-            direction="BUY",
-            price=1.08500,
-            tp_price=1.09500,
-            sl_price=1.08000,
-            lot_size=0.1,
-            confidence_score=0.85,
-            confidence="HIGH",
-            strategy="eurusd_simple",
-            status="PROPOSED",
-        )
-        self.assertIsNotNone(sig_id)
-        self.assertGreater(sig_id, 0)
-        self.assertIsNotNone(store._session_id)
+            sig_id = store.insert_signal(
+                symbol="EURUSD",
+                direction="BUY",
+                price=1.08500,
+                tp_price=1.09500,
+                sl_price=1.08000,
+                lot_size=0.1,
+                confidence_score=0.85,
+                confidence="HIGH",
+                strategy="eurusd_simple",
+                status="PROPOSED",
+            )
+            self.assertIsNotNone(sig_id)
+            self.assertGreater(sig_id, 0)
+            self.assertIsNotNone(store._session_id)
+        finally:
+            try:
+                os.remove(tmp_db.name)
+            except Exception:
+                pass
 
     def test_autosignals_headless_creation(self):
         """Verify AutoSignalsService can be instantiated and initialized without Discord bot"""

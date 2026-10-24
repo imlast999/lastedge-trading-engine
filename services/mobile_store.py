@@ -555,8 +555,9 @@ class MobileStore:
 _store: Optional[MobileStore] = None
 
 
-def get_mobile_store(db_path: str = _DEFAULT_DB) -> MobileStore:
+def get_mobile_store(db_path: Optional[str] = None) -> MobileStore:
     global _store
-    if _store is None:
-        _store = MobileStore(db_path)
+    target_db = db_path or os.getenv('TRADING_DB_PATH') or _DEFAULT_DB
+    if _store is None or _store.db_path != target_db:
+        _store = MobileStore(target_db)
     return _store

@@ -12,8 +12,10 @@ Tests para Aprobación Institucional, Slippage Guard, Auto-Expiración y Vault
 
 from __future__ import annotations
 
+import os
 import json
 import time
+import tempfile
 import unittest
 import urllib.request
 import urllib.error
@@ -23,6 +25,7 @@ from unittest.mock import MagicMock, patch
 import pandas as pd
 import numpy as np
 
+import services.database
 from services.database import get_database_manager
 from services.bot_service import BotService
 from services.autosignals import AutoSignalsService
@@ -36,7 +39,13 @@ from strategies.vault.eurusd_flow import EURUSDFlowStrategy
 class TestInstitutionalApprovalAndVault(unittest.TestCase):
 
     def setUp(self):
-        self.db_mgr = get_database_manager()
+        self._orig_trading_db_path = os.environ.get("TRADING_DB_PATH")
+        self.tmp_db = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+        self.tmp_db.close()
+        os.environ["TRADING_DB_PATH"] = self.tmp_db.name
+
+        services.database._db_manager = None
+        self.db_mgr = get_database_manager(self.tmp_db.name)
         with self.db_mgr.get_connection() as conn:
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS enhanced_signals (
@@ -65,6 +74,19 @@ class TestInstitutionalApprovalAndVault(unittest.TestCase):
                 )
             """)
         self.bot_service = BotService()
+
+    def tearDown(self):
+        services.database._db_manager = None
+        if self._orig_trading_db_path is not None:
+            os.environ["TRADING_DB_PATH"] = self._orig_trading_db_path
+        else:
+            os.environ.pop("TRADING_DB_PATH", None)
+
+        try:
+            if hasattr(self, "tmp_db") and os.path.exists(self.tmp_db.name):
+                os.remove(self.tmp_db.name)
+        except Exception:
+            pass
 
     def test_slippage_guard_detection_and_force(self):
         now_iso = datetime.now(timezone.utc).isoformat()

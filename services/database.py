@@ -254,18 +254,18 @@ _db_service: Optional[DatabaseService] = None
 def get_database_manager(db_path: Optional[str] = None) -> DatabaseManager:
     """Obtiene la instancia del DatabaseManager."""
     global _db_manager
-    if _db_manager is None or (db_path and _db_manager.db_path != db_path):
-        path = db_path or _DEFAULT_DB_PATH
-        _db_manager = DatabaseManager(path)
+    target_path = db_path or os.getenv('TRADING_DB_PATH') or _DEFAULT_DB_PATH
+    if _db_manager is None or _db_manager.db_path != target_path:
+        _db_manager = DatabaseManager(target_path)
     return _db_manager
 
 
 def get_database_service(db_path: Optional[str] = None) -> DatabaseService:
     """Obtiene la instancia global del servicio de base de datos."""
     global _db_service
-    if _db_service is None or (db_path and _db_service.db_path != db_path):
-        path = db_path or _DEFAULT_DB_PATH
-        _db_service = DatabaseService(path)
+    target_path = db_path or os.getenv('TRADING_DB_PATH') or _DEFAULT_DB_PATH
+    if _db_service is None or _db_service.db_path != target_path:
+        _db_service = DatabaseService(target_path)
     return _db_service
 
 
