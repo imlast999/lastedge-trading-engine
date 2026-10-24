@@ -60,7 +60,7 @@
   },
 
   "BTCEUR": {
-    "strategy": "btceur_partial",
+    "strategy": "btceur_trend_surge",
     "fallback_strategy": "btc_trend_pullback_v1",
     "enabled": true,
     "risk_per_trade": 0.5,
@@ -70,8 +70,8 @@
     "expires_minutes": 60,
     "active_sessions": ["all"],
     "avoid_news": false,
-    "description": "SIMPLIFICADO: EMA12/26 momentum + EMA50 filtro + ATR expansión",
-    "philosophy": "Momentum + Tendencia + Expansión",
+    "description": "BTCEUR Trend Surge: Macro H4 (EMA50>200) + Pullback EMA20 H1 + Filtro ATR y Volumen",
+    "philosophy": "Trend Following + Pullback Institucional H4/H1",
     "timeframes": ["H1", "H4"],
     "priority": "MEDIUM",
     "use_fallback": true,

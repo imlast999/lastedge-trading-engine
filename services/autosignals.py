@@ -623,38 +623,27 @@ class AutoSignalsService:
                     except Exception as exec_err:
                         log_event(f"❌ Error en ejecución real: {exec_err}", "ERROR", "AUTOSIGNAL")
 
-                # ── Notificación Proactiva a Telegram ─────────────────────────
+                # ── Notificación Proactiva a Telegram (Solo órdenes auto-aprobadas / ejecutadas) ──
+                # Las señales pendientes (PROPOSED) son gestionadas por LastEdge App con botones interactivos.
                 try:
                     tg_token = os.getenv("TELEGRAM_BOT_TOKEN")
                     tg_chat_id = os.getenv("TELEGRAM_CHAT_ID")
-                    if tg_token and tg_chat_id:
+                    if tg_token and tg_chat_id and auto_approved:
                         from services.telegram_adapter import TelegramAdapter
                         tg_adapter = TelegramAdapter(token=tg_token, chat_id=tg_chat_id)
-                        if not auto_approved:
-                            tg_text = (
-                                "⏸️ *SEÑAL PENDIENTE DE CONFIRMACIÓN*\n"
-                                "━━━━━━━━━━━━━━━━━━\n"
-                                f"Par: {symbol} | Dirección: {signal_type}\n"
-                                f"Precio: {entry:.5f}\n"
-                                f"SL: {sl:.5f} | TP: {tp:.5f} | R:R: 1:{rr_ratio:.2f}\n"
-                                f"Confianza: {confidence} | Estrategia: {strategy_name}\n"
-                                "━━━━━━━━━━━━━━━━━━\n"
-                                "👉 Pulsa \"Aprobar\" en tu Web Dashboard para ejecutarla en MT5."
-                            )
-                        else:
-                            status_label = "✅ EJECUTADA EN MT5" if exec_success else "🟢 AUTO-APROBADA"
-                            tg_text = (
-                                f"🎯 *SEÑAL {signal_type} {symbol}*\n"
-                                f"━━━━━━━━━━━━━━━━━━\n"
-                                f"📈 *Entrada:* `{entry:.5f}`\n"
-                                f"🛡️ *Stop Loss:* `{sl:.5f}`\n"
-                                f"🎯 *Take Profit:* `{tp:.5f}`\n"
-                                f"⚖️ *R:R Ratio:* `1:{rr_ratio:.2f}`\n"
-                                f"⭐ *Confianza:* *{confidence}* ({score:.2f})\n"
-                                f"⚙️ *Estrategia:* `{strategy_name}`\n"
-                                f"🚀 *Estado:* *{status_label}*\n"
-                                f"⏰ `{datetime.now(timezone.utc).strftime('%H:%M:%S UTC')}`"
-                            )
+                        status_label = "✅ EJECUTADA EN MT5" if exec_success else "🟢 AUTO-APROBADA"
+                        tg_text = (
+                            f"🎯 *SEÑAL {signal_type} {symbol}*\n"
+                            f"━━━━━━━━━━━━━━━━━━\n"
+                            f"📈 *Entrada:* `{entry:.5f}`\n"
+                            f"🛡️ *Stop Loss:* `{sl:.5f}`\n"
+                            f"🎯 *Take Profit:* `{tp:.5f}`\n"
+                            f"⚖️ *R:R Ratio:* `1:{rr_ratio:.2f}`\n"
+                            f"⭐ *Confianza:* *{confidence}* ({score:.2f})\n"
+                            f"⚙️ *Estrategia:* `{strategy_name}`\n"
+                            f"🚀 *Estado:* *{status_label}*\n"
+                            f"⏰ `{datetime.now(timezone.utc).strftime('%H:%M:%S UTC')}`"
+                        )
                         await tg_adapter.send_message(tg_text)
                 except Exception as tg_err:
                     logger.debug(f"[AutoSignals] Error enviando alerta Telegram: {tg_err}")
