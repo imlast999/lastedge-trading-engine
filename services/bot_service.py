@@ -473,6 +473,10 @@ class BotService:
             current_status = (row["status"] or "").upper()
             if current_status == "EXECUTED":
                 return {"ok": False, "error": f"La señal {signal_id} ya fue ejecutada previamente."}
+            if current_status == "EXPIRED":
+                return {"ok": False, "error": f"La señal {signal_id} ya ha expirado tras 10 minutos sin confirmación."}
+            if current_status in ("REJECTED", "REJECTED_MANUAL"):
+                return {"ok": False, "error": f"La señal {signal_id} fue descartada previamente."}
 
             symbol = row["symbol"]
             signal_type = (row["direction"] or row["signal_type"] or "BUY").upper()

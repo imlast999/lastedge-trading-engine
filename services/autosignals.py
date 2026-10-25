@@ -275,9 +275,18 @@ class AutoSignalsService:
                     try:
                         clean_time = str(raw_time).strip().replace("Z", "+00:00")
                         created_dt = datetime.fromisoformat(clean_time)
-                        if created_dt.tzinfo is None:
-                            created_dt = created_dt.replace(tzinfo=timezone.utc)
-                        age_seconds = (now_utc - created_dt).total_seconds()
+                        if created_dt.tzinfo is not None:
+                            age_seconds = (now_utc - created_dt).total_seconds()
+                        else:
+                            now_local = datetime.now()
+                            age_local = (now_local - created_dt).total_seconds()
+                            age_utc = (now_utc.replace(tzinfo=None) - created_dt).total_seconds()
+                            if age_local >= 0 and age_utc < 0:
+                                age_seconds = age_local
+                            elif age_utc >= 0 and age_local < 0:
+                                age_seconds = age_utc
+                            else:
+                                age_seconds = min(age_local, age_utc) if min(age_local, age_utc) >= 0 else max(age_local, age_utc)
                     except Exception:
                         continue
 
