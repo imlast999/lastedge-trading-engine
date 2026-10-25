@@ -440,6 +440,21 @@ class AutoSignalsService:
                         )
                     return False
 
+                # ── CANDADO DE POSICIONES ACTIVAS: Máximo 1 posición abierta por símbolo ──
+                try:
+                    import MetaTrader5 as mt5
+                    open_positions = mt5.positions_get(symbol=symbol)
+                    if open_positions and len(open_positions) >= 1:
+                        if self.scan_count % 30 == 1:
+                            log_event(
+                                f"🛡️ {symbol}: ya existe 1 posición abierta activa en MT5. "
+                                f"Omitiendo nueva señal para evitar sobreexposición.",
+                                "INFO", "AUTOSIGNAL"
+                            )
+                        return False
+                except Exception as pos_err:
+                    logger.debug(f"Error verificando posiciones abiertas para {symbol}: {pos_err}")
+
             except Exception as e:
                 if self.scan_count % 50 == 1:
                     log_event(f"Error evaluating signal for {symbol}: {e}", "WARNING", "AUTOSIGNAL")
