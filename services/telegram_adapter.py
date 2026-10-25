@@ -46,7 +46,12 @@ class TelegramAdapter:
             import aiohttp
             url = f"https://api.telegram.org/bot{self.token}/sendMessage"
             payload = {"chat_id": dest_chat, "text": text, "parse_mode": "Markdown"}
-            async with aiohttp.ClientSession() as session:
+            import ssl
+            ssl_ctx = ssl.create_default_context()
+            ssl_ctx.check_hostname = False
+            ssl_ctx.verify_mode = ssl.CERT_NONE
+            connector = aiohttp.TCPConnector(ssl=ssl_ctx)
+            async with aiohttp.ClientSession(connector=connector) as session:
                 async with session.post(url, json=payload, timeout=aiohttp.ClientTimeout(total=5)) as resp:
                     return resp.status == 200
         except Exception as e:
