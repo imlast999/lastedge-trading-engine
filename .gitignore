@@ -33,3 +33,6 @@ logs/
 strategies/vault/
 strategies/private/
 
+
+autosignals_state.json
+
