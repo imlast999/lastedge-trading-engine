@@ -49,8 +49,9 @@ if BTCEUR_AVAILABLE:
 
 # Ingestión automática de paquetes promovidos y estrategias privadas (Vault)
 try:
-    from services.strategy_loader import register_promoted_strategies, register_vault_strategies
+    from services.strategy_loader import register_promoted_strategies, register_vault_strategies, register_public_strategies
     register_promoted_strategies(STRATEGY_REGISTRY)
+    register_public_strategies(STRATEGY_REGISTRY)
     vault_count = register_vault_strategies(STRATEGY_REGISTRY)
     if vault_count > 0:
         logger.info("[StrategyVault] %d proprietary strategies activated from private vault.", vault_count)

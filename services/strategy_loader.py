@@ -267,6 +267,93 @@ def register_promoted_strategies(
     return registered_count
 
 
+def discover_public_strategies(public_dir: Optional[Union[str, Path]] = None) -> Dict[str, Dict[str, Any]]:
+    """
+    Escanea el directorio de estrategias públicas (strategies/public/)
+    buscando implementaciones abiertas de BaseStrategy para referencia y testing.
+    """
+    if public_dir is None:
+        public_dir = Path(__file__).parent.parent / "strategies" / "public"
+    else:
+        public_dir = Path(public_dir)
+
+    if not public_dir.exists() or not public_dir.is_dir():
+        return {}
+
+    discovered = {}
+    for py_path in public_dir.glob("*.py"):
+        if py_path.name.startswith(("_", ".")):
+            continue
+        module_name = f"public_strat_{py_path.stem}"
+        try:
+            spec = importlib.util.spec_from_file_location(module_name, py_path)
+            if spec is None or spec.loader is None:
+                continue
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+        except Exception as e:
+            logger.error("[StrategyLoader] Error loading public strategy from %s: %s", py_path.name, e)
+            continue
+
+        for attr_name in dir(mod):
+            attr = getattr(mod, attr_name)
+            if isinstance(attr, type) and issubclass(attr, BaseStrategy) and attr is not BaseStrategy:
+                strat_symbol = "EURUSD"
+                strat_name = getattr(attr, "strategy_name", attr.__name__)
+                try:
+                    temp_inst = attr()
+                    if hasattr(temp_inst, "strategy_name") and temp_inst.strategy_name:
+                        strat_name = str(temp_inst.strategy_name)
+                    if hasattr(temp_inst, "metadata") and temp_inst.metadata:
+                        strat_symbol = getattr(temp_inst.metadata, "symbol", "EURUSD")
+                except Exception:
+                    pass
+
+                discovered[py_path.stem.lower()] = {
+                    "class": attr,
+                    "symbol": strat_symbol.upper(),
+                    "strategy_name": strat_name,
+                    "code_path": py_path,
+                }
+    return discovered
+
+
+def register_public_strategies(
+    target_registry: Optional[Dict[str, Any]] = None,
+    public_dir: Optional[Union[str, Path]] = None
+) -> int:
+    """
+    Registra las estrategias públicas en target_registry y en services.signals.
+    """
+    if target_registry is None:
+        import strategies
+        target_registry = strategies.STRATEGY_REGISTRY
+
+    discovered = discover_public_strategies(public_dir)
+    registered_count = 0
+
+    for base_key, info in discovered.items():
+        cls = info["class"]
+        strat_name = info["strategy_name"]
+
+        target_registry[base_key] = cls
+        target_registry[base_key.upper()] = cls
+        target_registry[strat_name.lower()] = cls
+        target_registry[strat_name] = cls
+
+        try:
+            import services.signals as _signals_svc
+            _signals_svc.register_strategy(base_key, cls)
+            _signals_svc.register_strategy(strat_name.lower(), cls)
+        except Exception:
+            pass
+
+        registered_count += 1
+        logger.info("[StrategyLoader] Registered public benchmark strategy '%s' (%s)", cls.__name__, base_key)
+
+    return registered_count
+
+
 def discover_vault_strategies(vault_dir: Optional[Union[str, Path]] = None) -> Dict[str, Dict[str, Any]]:
     """
     Escanea el directorio privado de estrategias (Vault) buscando estrategias propietarias:
