@@ -28,7 +28,7 @@
 **LastEdge Trading Engine** is the high-performance, rock-solid execution core of the LastEdge quantitative platform. It connects directly to MetaTrader 5 (MT5), enforces strict risk boundaries via **Risk Engine v2**, dynamically ingests and verifies cryptographically promoted strategies from Strategy Lab, executes trades with sub-second latency, and exposes a local REST API for telemetry.
 
 ### Key Capabilities:
-- **Sub-Second MT5 Execution**: Ultra-low latency order entry, modification, and partial exits via official MT5 Python API.
+- **Sub-Second MT5 Execution**: Ultra-low latency order entry, modification, and partial exits via official MT5 Python API, with high-resolution historical candle queries for technical chart delivery and visual audit.
 - **Risk Engine v2**: Pre-trade position sizing, leverage and margin limit checks, daily drawdown circuit breakers, and dynamic trailing stops.
 - **Cryptographic Package Ingestion**: Dynamic verification and loading of promoted strategy packages (`.py` + `.json` sidecars) via `services/strategy_loader.py` with `code_sha256` and `config_hash` validation.
 - **Vault & Private Strategy Support**: Secure isolation of proprietary alpha models in `strategies/vault/` and `strategies/private/`.
@@ -50,7 +50,7 @@ LastEdge is built as a tri-system decoupled architecture. This repository operat
 | :--- | :--- | :--- |
 | 🧭 [**LastEdge (Main Suite)**](https://github.com/imlast999/LastEdge) | Ecosystem Orchestrator & CLI | **Unified Workspace**: Automated setup script (`setup.bat` / `clone_repos.bat`) to synchronize and run the complete three-repository trading suite. |
 | 🧪 [**LastEdge Strategy Lab**](https://github.com/imlast999/lastedge-strategy-lab) | Quantitative Research & Validation | **Strategy Promotion**: Strategy Lab researches and validates candidates (WFA, Monte Carlo, Exit Research) and promotes verified packages (`.py` + `.json`) with `code_sha256` into this engine's `strategies/` directory. |
-| 📱 [**LastEdge App**](https://github.com/imlast999/lastedge-app) | Web Dashboard, Mobile & Bots | **REST Telemetry & Control**: LastEdge App queries this engine's REST API (`http://localhost:8081`) for account equity, active positions, open orders, and risk state. |
+| 📱 [**LastEdge App**](https://github.com/imlast999/lastedge-app) | Web Dashboard, Mobile & Bots | **REST Telemetry & Control**: LastEdge App queries this engine's REST API (`http://localhost:8081`) for account equity, active positions, open orders, risk state, and live MT5 rates for visual technical chart generation. |
 
 Both the Trading Engine and Strategy Lab share the exact canonical strategy contract [`strategies/base.py`](strategies/base.py) with typed `SignalIntent` parity.
 
