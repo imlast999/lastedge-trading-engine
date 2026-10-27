@@ -125,6 +125,7 @@ class StrategyLoader:
                 return None, f"Failed to create module spec for {code_path}", manifest
 
             mod = importlib.util.module_from_spec(spec)
+            mod.__package__ = "strategies"
             spec.loader.exec_module(mod)
         except Exception as e:
             err_msg = f"Exception executing module {code_path}: {e}"
@@ -290,6 +291,7 @@ def discover_public_strategies(public_dir: Optional[Union[str, Path]] = None) ->
             if spec is None or spec.loader is None:
                 continue
             mod = importlib.util.module_from_spec(spec)
+            mod.__package__ = "strategies"
             spec.loader.exec_module(mod)
         except Exception as e:
             logger.error("[StrategyLoader] Error loading public strategy from %s: %s", py_path.name, e)
