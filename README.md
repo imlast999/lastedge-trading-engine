@@ -5,11 +5,13 @@
 # LastEdge Trading Engine
 
 [![Trading Engine CI](https://github.com/imlast999/lastedge-trading-engine/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/imlast999/lastedge-trading-engine/actions/workflows/ci.yml)
+[![Tests](https://img.shields.io/badge/Tests-108%2F108%20Passed-success)](https://github.com/imlast999/lastedge-trading-engine)
+[![Risk Engine](https://img.shields.io/badge/Risk%20Engine-v2%20Active-blue)](https://github.com/imlast999/lastedge-trading-engine)
 
 > **Repository:** [`imlast999/lastedge-trading-engine`](https://github.com/imlast999/lastedge-trading-engine)  
 > **Role:** Production Execution Engine, Risk Engine v2, Dynamic Strategy Loader & MT5 Driver  
 > **Status:** Production Ready  
-> **Tests:** 102 / 102 Passed (100% Green)  
+> **Tests:** 108 / 108 Passed (100% Green)  
 
 </div>
 
@@ -29,6 +31,8 @@
 - **Sub-Second MT5 Execution**: Ultra-low latency order entry, modification, and partial exits via official MT5 Python API.
 - **Risk Engine v2**: Pre-trade position sizing, leverage and margin limit checks, daily drawdown circuit breakers, and dynamic trailing stops.
 - **Cryptographic Package Ingestion**: Dynamic verification and loading of promoted strategy packages (`.py` + `.json` sidecars) via `services/strategy_loader.py` with `code_sha256` and `config_hash` validation.
+- **Vault & Private Strategy Support**: Secure isolation of proprietary alpha models in `strategies/vault/` and `strategies/private/`.
+- **Broker Quality Certification**: Real-time measurement and telemetry of average latency, slippage, and fill rate.
 - **Typed Signal Contract**: Full support for typed [`SignalIntent`](strategies/base.py) objects and transparent mapping compatibility.
 - **Unified Registries**: Automatic bidirectional synchronization between `strategies.STRATEGY_REGISTRY` and `services.signals.STRATEGY_REGISTRY`.
 - **Fail-Safe Operation**: Automatic reconnection with exponential backoff (`reconnection_system.py`) and market opening safeguards.
@@ -44,8 +48,8 @@ LastEdge is built as a tri-system decoupled architecture. This repository operat
 
 | Repository | Role | Integration Point |
 | :--- | :--- | :--- |
-| 🌐 [**LastEdge (Main Suite)**](https://github.com/imlast999/LastEdge) | Ecosystem Orchestrator & CLI | **Unified Workspace**: Automated setup script (`setup.bat` / `clone_repos.bat`) to synchronize and run the complete three-repository trading suite. |
-| 🔬 [**LastEdge Strategy Lab**](https://github.com/imlast999/lastedge-strategy-lab) | Quantitative Research & Validation | **Strategy Promotion**: Strategy Lab researches and validates candidates (WFA, Monte Carlo, Exit Research) and promotes verified packages (`.py` + `.json`) with `code_sha256` into this engine's `strategies/` directory. |
+| 🧭 [**LastEdge (Main Suite)**](https://github.com/imlast999/LastEdge) | Ecosystem Orchestrator & CLI | **Unified Workspace**: Automated setup script (`setup.bat` / `clone_repos.bat`) to synchronize and run the complete three-repository trading suite. |
+| 🧪 [**LastEdge Strategy Lab**](https://github.com/imlast999/lastedge-strategy-lab) | Quantitative Research & Validation | **Strategy Promotion**: Strategy Lab researches and validates candidates (WFA, Monte Carlo, Exit Research) and promotes verified packages (`.py` + `.json`) with `code_sha256` into this engine's `strategies/` directory. |
 | 📱 [**LastEdge App**](https://github.com/imlast999/lastedge-app) | Web Dashboard, Mobile & Bots | **REST Telemetry & Control**: LastEdge App queries this engine's REST API (`http://localhost:8081`) for account equity, active positions, open orders, and risk state. |
 
 Both the Trading Engine and Strategy Lab share the exact canonical strategy contract [`strategies/base.py`](strategies/base.py) with typed `SignalIntent` parity.
@@ -58,103 +62,41 @@ Both the Trading Engine and Strategy Lab share the exact canonical strategy cont
 LastEdge Trading Engine/
 ├── main.py                         # Production Trading Engine entry point (API + Market Scanner)
 ├── mt5_client.py                   # Low-level MetaTrader 5 connection driver
-├── reconnection_system.py          # Auto-reconnection & MT5 health checker
-├── secrets_store.py                # Secure credential storage
-├── rules_config.json               # Symbol & strategy parameters
-├── core/
-│   ├── circuit_breaker.py          # Daily drawdown & consecutive loss limiter
-│   ├── journal.py                  # Trade Journal and execution logger
-│   └── risk/                       # Risk Engine v2
-│       ├── engine.py               # Risk engine orchestrator
-│       ├── position_sizer.py       # Lot sizing based on balance & SL distance
-│       ├── margin_checker.py       # Account leverage & free margin checker
-│       ├── portfolio_risk.py       # Portfolio-wide exposure limits
-│       └── config.py               # Risk constants & thresholds
 ├── services/
-│   ├── api_server.py               # REST API server (port 8081)
-│   ├── bot_service.py              # Unified bot service façade
-│   ├── database.py                 # SQLite database manager (trading.db)
-│   ├── execution.py                # Order dispatch & ticket tracker
-│   ├── observability.py            # Latency, spread & broker scoring
-│   ├── signals.py                  # Signal dispatcher & unified strategy registry
-│   ├── strategy_loader.py          # Cryptographic package verifier & dynamic loader
-│   ├── trailing_stops.py           # Dynamic trailing stop manager
-│   └── autosignals.py              # Automated background signal scanner
-├── strategies/
+│   ├── api_server.py               # REST API Server (:8081)
+│   ├── risk_engine.py              # Pre-trade sizing, leverage checks & circuit breakers
+│   ├── strategy_loader.py          # Cryptographic package verifier & vault loader
+│   ├── execution_quality.py        # Latency, slippage & fill-rate certifier
+│   └── reconnection_system.py      # Exponential backoff auto-reconnector
+├── strategies/                     # Production trading strategies
 │   ├── base.py                     # Canonical BaseStrategy & SignalIntent contract
-│   ├── eurusd.py                   # EURUSD production strategy
-│   ├── xauusd.py                   # XAUUSD production strategy
-│   ├── xauusd_partial.py           # XAUUSD partial exit strategy
-│   ├── btceur_new.py               # BTCEUR production strategy
-│   └── btceur_partial.py           # BTCEUR partial exit strategy
-├── tests/                          # 89 automated unit, risk & ingestion tests
-└── docs/                           # Comprehensive technical documentation
+│   ├── vault/                      # Proprietary strategy vault
+│   └── private/                    # Local git-ignored custom strategies
+├── tests/                          # 108 automated execution & risk tests
+└── docs/                           # Engine technical documentation
 ```
 
 ---
 
-## 4. Quick Start & Installation
-
-### Requirements:
-- Python 3.10+ (Windows recommended for direct MetaTrader 5 connection)
-- Active MetaTrader 5 trading account (Demo or Live)
-
-### Step 1: Install Dependencies
-```bash
-pip install -r requirements.txt
-```
-
-### Step 2: Configure Environment
-```bash
-cp .env.example .env
-```
-Edit `.env` with your MT5 broker credentials:
-```ini
-MT5_LOGIN=12345678
-MT5_PASSWORD=your_password
-MT5_SERVER=YourBroker-Server
-MT5_PATH=C:\Program Files\MetaTrader 5\terminal64.exe
-TRADING_API_PORT=8081
-```
-
-### Step 3: Run Trading Engine
-```bash
-python main.py
-```
-To run the REST API server independently:
-```bash
-python -m services.api_server 8081
-```
-
----
-
-## 5. Running Tests & Continuous Integration
+## 4. Running Tests & Continuous Integration
 
 ```bash
-# Run complete test suite locally
+# Run all Trading Engine tests locally
 python -m pytest tests/ -v
 ```
-Current test suite status: **102 / 102 passed (100% Green)**.
+Current test suite status: **108 / 108 passed (100% Green)**.
 
 ### CI / Continuous Integration:
-- **Pipeline**: Automated on every push and pull request to `main` via [GitHub Actions](.github/workflows/ci.yml).
-- **Environment**: Multi-Python matrix (3.10, 3.11, 3.12, 3.13) on Ubuntu and Windows.
-- **Offline & Safe**: Uses mocked MT5 terminal drivers with zero external broker requirements.
+- **Trading Engine CI**: Automated on every push and pull request via [GitHub Actions](.github/workflows/ci.yml).
+- **Environment**: Multi-Python matrix on Windows and Linux runners with mock MT5 drivers.
 
 ---
 
-## 6. Documentation Index
+## 5. Documentation Index
 
-For detailed technical specifications, refer to [`docs/`](docs/):
+For exhaustive technical guides, refer to [`docs/`](docs/):
 
-- 🏛️ [**Architecture**](docs/ARCHITECTURE.md): Comprehensive module breakdown and data flow.
-- ⚙️ [**Installation**](docs/INSTALLATION.md): Setup, dependencies, and virtual environments.
-- 🔧 [**Configuration**](docs/CONFIGURATION.md): Environment variables, `rules_config.json`, and secrets.
-- ⚡ [**Execution Lifecycle**](docs/EXECUTION.md): Order lifecycle, tick scanning, and signal generation.
-- 🛡️ [**Risk Engine v2**](docs/RISK_ENGINE.md): Position sizing formulas, margin checks, and circuit breakers.
-- 📈 [**Strategies**](docs/STRATEGIES.md): EURUSD, XAUUSD, BTCEUR specifications and parameter tables.
-- 📜 [**Strategy Contract**](docs/STRATEGY_CONTRACT.md): Contract reference to Strategy Lab, `SignalIntent`, and loader.
-- 🔌 [**MetaTrader 5 Driver**](docs/MT5.md): Low-level MT5 connection, error codes, and reconnection.
-- 🌐 [**REST API**](docs/API.md): Endpoint definitions, schemas, and payload examples for port `8081`.
-- 🛠️ [**Operations & Deployment**](docs/OPERATIONS.md): Operational readiness, broker certification, VPS setup, and backups.
-- 🧪 [**Testing & CI/CD**](docs/TESTING.md): Running unit, integration, and risk test suites, and GitHub Actions.
+- 📐 [**Architecture**](docs/ARCHITECTURE.md): Microservice execution model and IPC interfaces.
+- 🛡️ [**Risk Engine v2**](docs/RISK_ENGINE.md): Dynamic sizing, margin thresholds, and circuit breakers.
+- 🔌 [**MetaTrader 5 Driver**](docs/MT5_INTEGRATION.md): Connection management, retries, and order dispatch.
+- 🧪 [**Testing & CI/CD**](docs/TESTING.md): Verification checklist and operational readiness tests.
