@@ -668,7 +668,30 @@ class AutoSignalsService:
                             f"🚀 *Estado:* *{status_label}*\n"
                             f"⏰ `{datetime.now(timezone.utc).strftime('%H:%M:%S UTC')}`"
                         )
-                        await tg_adapter.send_message(tg_text)
+                        # Intentar enviar con gráfico técnico adjunto si chart_helper está disponible
+                        chart_sent = False
+                        try:
+                            import sys
+                            app_services_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "LastEdge App"))
+                            if app_services_path not in sys.path:
+                                sys.path.insert(0, app_services_path)
+                            from services.chart_helper import get_chart_for_signal
+                            chart_path = get_chart_for_signal({
+                                "symbol": symbol,
+                                "type": signal_type,
+                                "entry": entry,
+                                "sl": sl,
+                                "tp": tp,
+                                "timeframe": getattr(best_plan, "timeframe", "H1")
+                            })
+                            if chart_path and os.path.exists(chart_path):
+                                await tg_adapter.send_photo(photo_path=chart_path, caption=tg_text)
+                                chart_sent = True
+                        except Exception as chart_err:
+                            logger.debug(f"[AutoSignals] No se pudo generar chart adjunto: {chart_err}")
+
+                        if not chart_sent:
+                            await tg_adapter.send_message(tg_text)
                 except Exception as tg_err:
                     logger.debug(f"[AutoSignals] Error enviando alerta Telegram: {tg_err}")
                 

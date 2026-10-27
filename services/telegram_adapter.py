@@ -59,4 +59,34 @@ class TelegramAdapter:
             return False
 
 
+    async def send_photo(self, photo_path: str, caption: Optional[str] = None, chat_id: Optional[str] = None) -> bool:
+        """Envía una imagen a través de la API HTTP de Telegram con pie de foto opcional."""
+        dest_chat = chat_id or self.authorized_chat_id
+        if not self.token or not dest_chat or not os.path.exists(photo_path):
+            return False
+
+        try:
+            import aiohttp
+            url = f"https://api.telegram.org/bot{self.token}/sendPhoto"
+            form = aiohttp.FormData()
+            form.add_field("chat_id", str(dest_chat))
+            if caption:
+                form.add_field("caption", caption)
+                form.add_field("parse_mode", "Markdown")
+
+            with open(photo_path, "rb") as f:
+                form.add_field("photo", f.read(), filename=os.path.basename(photo_path), content_type="image/png")
+
+            import ssl
+            ssl_ctx = ssl.create_default_context()
+            ssl_ctx.check_hostname = False
+            ssl_ctx.verify_mode = ssl.CERT_NONE
+            connector = aiohttp.TCPConnector(ssl=ssl_ctx)
+            async with aiohttp.ClientSession(connector=connector) as session:
+                async with session.post(url, data=form, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                    return resp.status == 200
+        except Exception as e:
+            logger.debug(f"[TelegramAdapter] Error enviando imagen: {e}")
+            return False
+
 __all__ = ["TelegramAdapter"]
