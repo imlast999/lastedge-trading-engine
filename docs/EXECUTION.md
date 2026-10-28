@@ -77,8 +77,14 @@ The engine evaluates every raw strategy signal using a multi-factor scoring mode
 | :--- | :---: | :--- | :--- |
 | **`VERY_HIGH`** | **`0.85 – 1.00`** | **Automated (Direct MT5)** | Order is executed immediately in MT5 with IOC filling. Broadcast as `AUTO-APROBADA ✅` to Discord, Telegram & Web Dashboard. |
 | **`HIGH`** | **`0.67 – 0.84`** | **Automated (Direct MT5)** | Order is executed immediately in MT5 (optimized threshold $\ge 0.67$). Captures high-conviction trades without manual delay. |
-| **`MEDIUM`** | **`0.60 – 0.66`** | **Manual 1-Click Approval** | Saved in SQLite as `PROPOSED`. Sent to Web Dashboard & Mobile App for human oversight with live candlestick chart modal. |
+| **`MEDIUM`** | **`0.60 – 0.66`** | **Manual 1-Click Approval** | Saved in SQLite as `PROPOSED`. Sent to Web Dashboard & Mobile App in Hybrid Mode; automatically discarded when 100% Autonomous Mode is ON. |
 | **`LOW`** | **`< 0.60`** | **Automatic Rejection** | Discarded at pre-filter. Zero alert noise, preventing execution in choppy or sub-optimal market conditions. |
+
+### 🤖 Dual-Mode Autonomous Operation
+The engine incorporates a runtime switch:
+- **100% Autonomous (`ON`)**: Only signals with score $\ge 0.67$ execute into MT5; `MEDIUM` signals are filtered automatically to eliminate decision fatigue.
+- **Hybrid Review (`OFF`)**: `MEDIUM` signals are stored and broadcast for manual discretionary approval.
+State is persisted in `rules_config.json` (`GLOBAL_SETTINGS.autonomous_mode`) and `autosignals_state.json`.
 
 ### Configuration Mapping (`rules_config.json`):
 ```json

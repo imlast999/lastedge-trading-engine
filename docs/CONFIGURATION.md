@@ -66,9 +66,16 @@ Controls symbol-specific parameters, indicator windows, and execution thresholds
     },
     "min_rr_ratio": 1.5,
     "expires_minutes": 90
+  },
+  "GLOBAL_SETTINGS": {
+    "autonomous_mode": true
   }
 }
 ```
+
+### `GLOBAL_SETTINGS.autonomous_mode`
+- `true` (Default): 100% Autonomous Hands-Free Mode. `MEDIUM` signals (< 0.67) are filtered out automatically; only `HIGH` and `VERY_HIGH` ($\ge 0.67$) execute into MT5.
+- `false`: Hybrid Review Mode. `MEDIUM` signals are queued for manual approval.
 
 ---
 

@@ -85,3 +85,12 @@ Trading Engine exposes a lightweight, multi-threaded REST API server built on Py
 - **`POST /api/trading/positions/close`**
 - **Payload**: `{"ticket": 98765432}`
 - **Description**: Manually closes an open MT5 position by ticket.
+
+### 2.7 Autonomous Mode Control
+- **`GET /api/trading/autonomous-mode`**
+  - **Description**: Returns the current 100% Autonomous Mode state.
+  - **Response**: `{"ok": true, "autonomous_mode": true, "description": "..."}`
+- **`POST /api/trading/autonomous-mode`**
+  - **Description**: Sets or toggles Autonomous Mode.
+  - **Payload**: `{"mode": "toggle"}` or `{"enabled": true/false}`
+  - **Response**: `{"ok": true, "autonomous_mode": true, "previous_mode": false, "message": "..."}`
