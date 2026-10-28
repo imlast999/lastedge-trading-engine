@@ -30,6 +30,7 @@
 ### Key Capabilities:
 - **Sub-Second MT5 Execution**: Ultra-low latency order entry, modification, and partial exits via official MT5 Python API, with high-resolution historical candle queries for technical chart delivery and visual audit.
 - **Risk Engine v2**: Pre-trade position sizing, leverage and margin limit checks, daily drawdown circuit breakers, and dynamic trailing stops.
+- **Signal Confidence Scoring**: Multi-factor quantitative scoring (ATR volatility, RSI momentum, multi-timeframe trend confluency) categorizing signals into deterministic execution tiers.
 - **Cryptographic Package Ingestion**: Dynamic verification and loading of promoted strategy packages (`.py` + `.json` sidecars) via `services/strategy_loader.py` with `code_sha256` and `config_hash` validation.
 - **Vault & Private Strategy Support**: Secure isolation of proprietary alpha models in `strategies/vault/` and `strategies/private/`.
 - **Broker Quality Certification**: Real-time measurement and telemetry of average latency, slippage, and fill rate.
@@ -42,7 +43,32 @@
 
 ---
 
-## 2. Ecosystem & Sister Repositories
+## 2. Signal Confidence & Auto-Execution Matrix
+
+The engine scans monitored assets (`EURUSD`, `XAUUSD`, `BTCEUR`) every 60 seconds. Raw setups are scored against technical confirmations and routed deterministically:
+
+| Tier | Confluence Score | Execution Mode | Pipeline Routing |
+| :--- | :---: | :--- | :--- |
+| **`VERY_HIGH`** | **`0.85 – 1.00`** | **Automated (Direct MT5)** | Order is executed immediately in MT5 with IOC filling. Broadcast as `AUTO-APROBADA ✅` to Discord, Telegram & Web Dashboard. |
+| **`HIGH`** | **`0.67 – 0.84`** | **Automated (Direct MT5)** | Order is executed immediately in MT5 (optimized $\ge 0.67$ threshold). Captures high-conviction trades without manual delay. |
+| **`MEDIUM`** | **`0.60 – 0.66`** | **Manual 1-Click Approval** | Stored in SQLite as `PROPOSED`. Sent to Web Dashboard & Mobile App for human oversight with live candlestick chart modal. |
+| **`LOW`** | **`< 0.60`** | **Automatic Rejection** | Discarded at pre-filter. Zero alert noise, preventing execution in choppy or sub-optimal market conditions. |
+
+```text
+[Raw Strategy Setup] ──▶ [Multi-Factor Scoring (0.00 - 1.00)]
+                                  │
+          ┌───────────────────────┼───────────────────────┐
+          ▼                       ▼                       ▼
+    Score < 0.60           0.60 <= Score < 0.67      Score >= 0.67
+     [LOW TIER]               [MEDIUM TIER]        [HIGH / VERY_HIGH]
+          │                       │                       │
+   Auto-Discarded          Sent to Dashboard       Direct MT5 Execution
+  (Zero Market Noise)    (1-Click Mobile Gate)    (Instant Order Fill)
+```
+
+---
+
+## 3. Ecosystem & Sister Repositories
 
 LastEdge is built as a tri-system decoupled architecture. This repository operates autonomously but integrates cleanly with its sister systems:
 
@@ -56,14 +82,21 @@ Both the Trading Engine and Strategy Lab share the exact canonical strategy cont
 
 ---
 
-## 3. Architecture & Directory Structure
+## 4. Architecture & Directory Structure
 
 ```text
 LastEdge Trading Engine/
 ├── main.py                         # Production Trading Engine entry point (API + Market Scanner)
 ├── mt5_client.py                   # Low-level MetaTrader 5 connection driver
+├── rules_config.json               # Symbol parameters, risk sizing & confidence thresholds
+├── core/
+│   ├── engine.py                   # Multi-strategy scanner & confidence system
+│   ├── scoring.py                  # Flexible scoring & confirmation evaluation
+│   └── risk_manager.py             # Portfolio risk and circuit breaker guards
 ├── services/
 │   ├── api_server.py               # REST API Server (:8081)
+│   ├── autosignals.py              # Automated scanner & MT5 order dispatcher
+│   ├── execution.py                # Order execution, ticket tracking & slippage monitor
 │   ├── risk_engine.py              # Pre-trade sizing, leverage checks & circuit breakers
 │   ├── strategy_loader.py          # Cryptographic package verifier & vault loader
 │   ├── execution_quality.py        # Latency, slippage & fill-rate certifier
@@ -78,7 +111,7 @@ LastEdge Trading Engine/
 
 ---
 
-## 4. Running Tests & Continuous Integration
+## 5. Running Tests & Continuous Integration
 
 ```bash
 # Run all Trading Engine tests locally
@@ -92,11 +125,13 @@ Current test suite status: **108 / 108 passed (100% Green)**.
 
 ---
 
-## 5. Documentation Index
+## 6. Documentation Index
 
 For exhaustive technical guides, refer to [`docs/`](docs/):
 
 - 📐 [**Architecture**](docs/ARCHITECTURE.md): Microservice execution model and IPC interfaces.
+- ⚡ [**Execution Lifecycle**](docs/EXECUTION.md): Step-by-step trading loop and order submission.
+- ⚙️ [**Configuration**](docs/CONFIGURATION.md): `.env`, `rules_config.json`, and secrets management.
 - 🛡️ [**Risk Engine v2**](docs/RISK_ENGINE.md): Dynamic sizing, margin thresholds, and circuit breakers.
 - 🔌 [**MetaTrader 5 Driver**](docs/MT5_INTEGRATION.md): Connection management, retries, and order dispatch.
 - 🧪 [**Testing & CI/CD**](docs/TESTING.md): Verification checklist and operational readiness tests.

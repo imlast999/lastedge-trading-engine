@@ -65,3 +65,27 @@ The live execution loop in `main.py` (via `AutoSignalsService`) operates on a de
 - **Filling Type**: `ORDER_FILLING_IOC` (Immediate Or Cancel) or `ORDER_FILLING_FOK` based on broker symbol info.
 - **Slippage Deviation**: Configurable per symbol (default 20 points).
 - **Magic Number**: Unique identifier per strategy (e.g. `100001` for EURUSD, `100002` for XAUUSD).
+
+
+---
+
+## 3. Signal Scoring & Confidence Tiers
+
+The engine evaluates every raw strategy signal using a multi-factor scoring model (trend alignment, ATR volatility regime, RSI momentum, and setup strength). Signals are deterministically categorized into four institutional tiers:
+
+| Tier | Confluence Score | Execution Mode | Pipeline Routing |
+| :--- | :---: | :--- | :--- |
+| **`VERY_HIGH`** | **`0.85 – 1.00`** | **Automated (Direct MT5)** | Order is executed immediately in MT5 with IOC filling. Broadcast as `AUTO-APROBADA ✅` to Discord, Telegram & Web Dashboard. |
+| **`HIGH`** | **`0.67 – 0.84`** | **Automated (Direct MT5)** | Order is executed immediately in MT5 (optimized threshold $\ge 0.67$). Captures high-conviction trades without manual delay. |
+| **`MEDIUM`** | **`0.60 – 0.66`** | **Manual 1-Click Approval** | Saved in SQLite as `PROPOSED`. Sent to Web Dashboard & Mobile App for human oversight with live candlestick chart modal. |
+| **`LOW`** | **`< 0.60`** | **Automatic Rejection** | Discarded at pre-filter. Zero alert noise, preventing execution in choppy or sub-optimal market conditions. |
+
+### Configuration Mapping (`rules_config.json`):
+```json
+"confidence_thresholds": {
+  "medium": 0.60,
+  "high": 0.67,
+  "very_high": 0.85
+},
+"min_score": 0.60
+```

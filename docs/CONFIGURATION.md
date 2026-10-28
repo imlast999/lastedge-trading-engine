@@ -1,22 +1,22 @@
-# LastEdge Trading Engine — Configuration Guide
+# LastEdge Trading Engine — Configuration & Secrets
 
 > **Module:** `LastEdge Trading Engine`  
-> **Config Files:** `.env`, `rules_config.json`, `secrets_store.py`  
+> **Source Files:** `main.py`, `rules_config.json`, `services/secrets_store.py`  
 
 ---
 
 ## 1. Environment Variables (`.env`)
 
 | Variable | Type | Default | Description |
-|---|---|---|---|
-| `MT5_LOGIN` | `int` | *None* | MT5 account account number (e.g. `12345678`). |
-| `MT5_PASSWORD` | `str` | *None* | MT5 trading password. |
-| `MT5_SERVER` | `str` | *None* | MT5 Broker server name. |
-| `MT5_PATH` | `str` | *Auto* | Path to `terminal64.exe` executable. |
-| `TRADING_API_PORT` | `int` | `8081` | Port for the local REST API server. |
-| `TRADING_API_KEY` | `str` | *None* | Optional secret API key for `X-API-Key` authentication. |
-| `TRADING_DB_PATH` | `str` | `data/trading.db` | Path to SQLite trading database. |
-| `LOG_LEVEL` | `str` | `INFO` | Logging level (`DEBUG`, `INFO`, `WARNING`, `ERROR`). |
+| :--- | :--- | :--- | :--- |
+| `MT5_LOGIN` | `int` | `None` | MetaTrader 5 account login number. |
+| `MT5_PASSWORD` | `str` | `None` | MT5 trading account password. |
+| `MT5_SERVER` | `str` | `None` | Broker server name (e.g. `FXLiveCapital-Server`). |
+| `MT5_PATH` | `str` | `None` | Path to `terminal64.exe` executable. |
+| `AUTO_EXECUTE_SIGNALS` | `bool` | `1` | `1` enables automated live MT5 trade dispatch; `0` forces signal-only alert mode. |
+| `AUTO_EXECUTE_CONFIDENCE`| `str` | `HIGH` | Minimum confidence level required for direct execution (`HIGH` $\ge 0.67$ or `VERY_HIGH` $\ge 0.85$). |
+| `DEMO_MODE` | `bool` | `True` | Forces demo account safety verification. |
+| `MAX_RISK_PER_TRADE` | `float` | `1.0` | Maximum risk capital percentage per position. |
 | `MAX_DAILY_LOSS_PCT`| `float` | `3.0` | Circuit breaker max daily loss percentage before auto-pause. |
 | `SCAN_INTERVAL` | `int` | `60` | Loop scan frequency in seconds. |
 
@@ -28,19 +28,44 @@ Controls symbol-specific parameters, indicator windows, and execution thresholds
 
 ```json
 {
-  "monitored_symbols": ["EURUSD", "XAUUSD", "BTCEUR"],
-  "magic_number": 100001,
-  "default_risk_pct": 1.0,
-  "max_open_positions": 5,
-  "max_spread_pips": {
-    "EURUSD": 2.0,
-    "XAUUSD": 35.0,
-    "BTCEUR": 150.0
+  "EURUSD": {
+    "strategy": "eurusd_partial",
+    "enabled": true,
+    "risk_per_trade": 0.75,
+    "min_score": 0.60,
+    "confidence_thresholds": {
+      "medium": 0.60,
+      "high": 0.67,
+      "very_high": 0.85
+    },
+    "min_rr_ratio": 1.5,
+    "expires_minutes": 90
   },
-  "circuit_breaker": {
-    "max_consecutive_losses": 3,
-    "risk_multiplier_after_loss": 0.5,
-    "daily_loss_limit_pct": 3.0
+  "XAUUSD": {
+    "strategy": "xauusd_partial",
+    "enabled": true,
+    "risk_per_trade": 0.75,
+    "min_score": 0.60,
+    "confidence_thresholds": {
+      "medium": 0.60,
+      "high": 0.67,
+      "very_high": 0.85
+    },
+    "min_rr_ratio": 1.5,
+    "expires_minutes": 90
+  },
+  "BTCEUR": {
+    "strategy": "btceur_partial",
+    "enabled": true,
+    "risk_per_trade": 0.50,
+    "min_score": 0.60,
+    "confidence_thresholds": {
+      "medium": 0.60,
+      "high": 0.67,
+      "very_high": 0.85
+    },
+    "min_rr_ratio": 1.5,
+    "expires_minutes": 90
   }
 }
 ```
