@@ -182,6 +182,11 @@ class TradingAPIHandler(BaseHTTPRequestHandler):
                 res = get_bot_service().toggle_autosignals(mode="status")
                 self._send_json(200, res)
 
+            elif path in ("/api/trading/autonomous-mode", "/api/autonomous-mode"):
+                from services.bot_service import get_bot_service
+                res = get_bot_service().get_autonomous_mode()
+                self._send_json(200, res)
+
             else:
                 self._send_json(404, {"ok": False, "error": f"Endpoint '{self.path}' not found on Trading Engine API."})
 
@@ -209,6 +214,13 @@ class TradingAPIHandler(BaseHTTPRequestHandler):
                 mode = payload.get("mode", "status")
                 from services.bot_service import get_bot_service
                 res = get_bot_service().toggle_autosignals(mode=mode)
+                self._send_json(200, res)
+
+            elif path in ("/api/trading/autonomous-mode", "/api/autonomous-mode"):
+                enabled = payload.get("enabled")
+                mode = payload.get("mode")
+                from services.bot_service import get_bot_service
+                res = get_bot_service().set_autonomous_mode(enabled=enabled, mode=mode)
                 self._send_json(200, res)
 
             elif path in ("/api/trading/signals/approve", "/api/signals/approve") or (path.startswith("/api/signals/") and path.endswith("/approve")):

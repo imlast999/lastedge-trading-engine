@@ -726,6 +726,44 @@ class BotService:
             "mode": mode_clean,
         }
 
+    def get_autonomous_mode(self) -> Dict[str, Any]:
+        """Obtiene el estado actual del Modo 100% Autónomo."""
+        from services.autosignals import get_auto_signal_service
+        auto_svc = get_auto_signal_service()
+        mode = auto_svc.is_autonomous_mode() if auto_svc else True
+        return {
+            "ok": True,
+            "autonomous_mode": mode,
+            "description": "100% Autónomo (Hands-Free): Solo se ejecutan señales HIGH/VERY_HIGH (≥ 0.67). Señales MEDIUM se descartan automáticamente." if mode else "Modo Híbrido: Señales MEDIUM (0.60-0.66) quedan pendientes para aprobación manual en Dashboard y Telegram."
+        }
+
+    def set_autonomous_mode(self, enabled=None, mode=None) -> Dict[str, Any]:
+        """Activa, desactiva o conmuta el Modo 100% Autónomo."""
+        from services.autosignals import get_auto_signal_service
+        auto_svc = get_auto_signal_service()
+        if not auto_svc:
+            return {"ok": False, "error": "AutoSignalsService no disponible"}
+
+        current = auto_svc.is_autonomous_mode()
+        if mode == "toggle":
+            new_val = not current
+        elif mode in ("on", "enable", "true", "1"):
+            new_val = True
+        elif mode in ("off", "disable", "false", "0"):
+            new_val = False
+        elif enabled is not None:
+            new_val = bool(enabled)
+        else:
+            new_val = not current
+
+        auto_svc.set_autonomous_mode(new_val)
+        return {
+            "ok": True,
+            "autonomous_mode": new_val,
+            "previous_mode": current,
+            "message": "Modo 100% Autónomo ACTIVADO. Las señales MEDIUM se filtran automáticamente; solo entrarán señales automáticas (≥ 0.67)." if new_val else "Modo Híbrido ACTIVADO. Las señales MEDIUM se mostrarán para aprobación manual."
+        }
+
     # ── 9. Diagnóstico Técnico de Salud (/health) ──────────────────────────────
 
     def get_health_status(self) -> Dict[str, Any]:

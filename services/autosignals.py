@@ -60,6 +60,10 @@ class AutoSignalsService:
         self._startup_cooldown_seconds = 120   # 2 minutos
         self._startup_time: Optional[datetime] = None   # se fija en start_auto_signal_loop
 
+        # Modo 100% Autónomo: Si es True, las señales MEDIUM (< 0.67) se descartan automáticamente
+        # y solo entran HIGH/VERY_HIGH (≥ 0.67) directo a MT5 sin requerir aprobación manual.
+        self._autonomous_mode: bool = True
+
         # Persistir cooldowns entre reinicios
         self._cooldown_file = os.path.join(
             os.path.dirname(os.path.dirname(__file__)), 'autosignals_state.json'
@@ -67,12 +71,20 @@ class AutoSignalsService:
         self._load_cooldown_state()
         
     def _load_cooldown_state(self):
-        """Restaura los cooldowns desde disco para sobrevivir reinicios."""
+        """Restaura los cooldowns y el modo operativo desde disco para sobrevivir reinicios."""
         try:
             if not os.path.exists(self._cooldown_file):
+                self._load_autonomous_mode_from_config()
                 return
             with open(self._cooldown_file, 'r', encoding='utf-8') as f:
                 data = json.load(f)
+
+            # Cargar modo autónomo
+            if 'autonomous_mode' in data:
+                self._autonomous_mode = bool(data['autonomous_mode'])
+            else:
+                self._load_autonomous_mode_from_config()
+
             # Solo restaurar si el archivo tiene menos de 24h
             saved_at = datetime.fromisoformat(data.get('saved_at', '2000-01-01T00:00:00+00:00'))
             if saved_at.tzinfo is None:
@@ -88,15 +100,29 @@ class AutoSignalsService:
                 except Exception:
                     pass
             self._daily_direction_count = data.get('daily_direction_count', {})
-            logger.info("AutoSignals: cooldowns restaurados desde disco")
+            st_text = 'ON' if self._autonomous_mode else 'OFF'
+            logger.info(f"AutoSignals: estado restaurado (Modo Autónomo: {st_text})")
         except Exception as e:
             logger.debug(f"AutoSignals: no se pudo cargar estado de cooldown: {e}")
+            self._load_autonomous_mode_from_config()
+
+    def _load_autonomous_mode_from_config(self):
+        """Carga autonomous_mode desde rules_config.json si existe."""
+        try:
+            cfg_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'rules_config.json')
+            if os.path.exists(cfg_path):
+                with open(cfg_path, 'r', encoding='utf-8') as cf:
+                    cfg_data = json.load(cf)
+                self._autonomous_mode = bool(cfg_data.get('GLOBAL_SETTINGS', {}).get('autonomous_mode', True))
+        except Exception:
+            self._autonomous_mode = True
 
     def _save_cooldown_state(self):
-        """Guarda los cooldowns en disco."""
+        """Guarda los cooldowns y el modo operativo en disco."""
         try:
             import json as _json
             data = {
+                'autonomous_mode': self._autonomous_mode,
                 'last_signal_time': {
                     sym: ts.isoformat()
                     for sym, ts in self._last_signal_time.items()
@@ -108,6 +134,35 @@ class AutoSignalsService:
                 _json.dump(data, f, indent=2)
         except Exception as e:
             logger.debug(f"AutoSignals: no se pudo guardar estado de cooldown: {e}")
+
+    def is_autonomous_mode(self) -> bool:
+        """Devuelve True si el modo 100% autónomo (Hands-Free) está activo."""
+        return getattr(self, '_autonomous_mode', True)
+
+    def set_autonomous_mode(self, enabled: bool) -> bool:
+        """Establece el modo autónomo y lo persiste en autosignals_state.json y rules_config.json."""
+        self._autonomous_mode = bool(enabled)
+        self._save_cooldown_state()
+        try:
+            cfg_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'rules_config.json')
+            if os.path.exists(cfg_path):
+                with open(cfg_path, 'r', encoding='utf-8') as cf:
+                    cfg_data = json.load(cf)
+                if 'GLOBAL_SETTINGS' in cfg_data:
+                    cfg_data['GLOBAL_SETTINGS']['autonomous_mode'] = self._autonomous_mode
+                    with open(cfg_path, 'w', encoding='utf-8') as cf:
+                        json.dump(cfg_data, cf, indent=2)
+        except Exception as e:
+            logger.debug(f"Error persistiendo autonomous_mode en rules_config.json: {e}")
+
+        mode_str = '100% AUTÓNOMO (Manos Libres - solo ≥ 0.67)' if self._autonomous_mode else 'HÍBRIDO (Manual Gate para MEDIUM)'
+        try:
+            from services.logging import log_event
+            log_event(f"🤖 Modo Operativo actualizado: {mode_str}", "INFO", "AUTOSIGNAL")
+        except Exception:
+            pass
+        logger.info(f"AutoSignals: Modo Operativo actualizado a {mode_str}")
+        return self._autonomous_mode
 
     def _check_direction_limit(self, symbol: str, direction: str) -> bool:
         """
@@ -410,6 +465,15 @@ class AutoSignalsService:
                 if confidence in ['LOW', 'VERY_LOW']:
                     if self.scan_count % 20 == 1:
                         log_event(f"{symbol} signal rejected: LOW confidence", "INFO", "AUTOSIGNAL")
+                    return False
+
+                # FILTRO MODO 100% AUTÓNOMO: Descartar MEDIUM (< 0.67) para no requerir intervención manual
+                if self.is_autonomous_mode() and confidence == 'MEDIUM':
+                    if self.scan_count % 20 == 1:
+                        log_event(
+                            f"🤖 {symbol} señal MEDIUM ({score:.2f}) descartada automáticamente (Modo 100% Autónomo activo)",
+                            "INFO", "AUTOSIGNAL"
+                        )
                     return False
 
                 # NEWS FILTER: pause during high-impact news blackout windows
@@ -734,12 +798,21 @@ class AutoSignalsService:
         except Exception as e:
             logger.error(f"Error en estadísticas periódicas: {e}")
 
+_global_autosignals_instance: Optional[AutoSignalsService] = None
+
+def get_auto_signal_service() -> Optional[AutoSignalsService]:
+    global _global_autosignals_instance
+    return _global_autosignals_instance
+
 def create_autosignals_service(bot=None, state=None, config=None):
     """Factory para crear el servicio de auto-señales, soporta modo headless"""
-    return AutoSignalsService(bot, state, config)
+    global _global_autosignals_instance
+    svc = AutoSignalsService(bot, state, config)
+    _global_autosignals_instance = svc
+    return svc
 
 
 # Alias para compatibilidad con verificadores
 AutoSignalsEngine = AutoSignalsService
 
-__all__ = ["AutoSignalsService", "AutoSignalsEngine", "create_autosignals_service"]
+__all__ = ["AutoSignalsService", "AutoSignalsEngine", "create_autosignals_service", "get_auto_signal_service"]
