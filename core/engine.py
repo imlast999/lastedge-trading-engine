@@ -521,9 +521,9 @@ class FlexibleScoring:
     def __init__(self):
         # Configuración por símbolo
         self.symbol_config = {
-            'EURUSD': {'min_score': 0.60, 'show_threshold': 0.50, 'setup_weight': 0.4},
+            'EURUSD': {'min_score': 0.60, 'show_threshold': 0.60, 'setup_weight': 0.4},
             'XAUUSD': {'min_score': 0.65, 'show_threshold': 0.60, 'setup_weight': 0.5},
-            'BTCEUR': {'min_score': 0.55, 'show_threshold': 0.45, 'setup_weight': 0.4}
+            'BTCEUR': {'min_score': 0.60, 'show_threshold': 0.60, 'setup_weight': 0.4}
         }
     
     def evaluate_signal_context(self, context: SignalContext) -> ScoringResult:
@@ -570,17 +570,17 @@ class FlexibleScoring:
         final_score = (setup_weight * 1.0) + ((1 - setup_weight) * weighted_score)
         
         # Determinar confianza
-        if final_score >= 0.75:
+        if final_score >= 0.85:
+            confidence = 'VERY_HIGH'
+        elif final_score >= 0.67:
             confidence = 'HIGH'
-        elif final_score >= 0.65:
-            confidence = 'MEDIUM-HIGH'
-        elif final_score >= 0.50:
+        elif final_score >= 0.60:
             confidence = 'MEDIUM'
         else:
             confidence = 'LOW'
         
-        # Determinar si mostrar
-        show_threshold = config.get('show_threshold', 0.50)
+        # Determinar si mostrar (filtro descarte < 0.60)
+        show_threshold = config.get('show_threshold', 0.60)
         should_show = final_score >= show_threshold
         
         return ScoringResult(
@@ -661,10 +661,9 @@ class ConfidenceSystem:
     def __init__(self):
         self.confidence_thresholds = {
             'VERY_HIGH': 0.85,
-            'HIGH': 0.70,
-            'MEDIUM-HIGH': 0.60,
-            'MEDIUM': 0.50,
-            'LOW': 0.30
+            'HIGH': 0.67,
+            'MEDIUM': 0.60,
+            'LOW': 0.00
         }
     
     def calculate_confidence_context(self, context: SignalContext) -> ConfidenceResult:
@@ -682,9 +681,9 @@ class ConfidenceSystem:
         # Determinar nivel
         confidence_level = self._score_to_level(confidence_score)
         
-        # Decisiones
-        should_show = confidence_score >= 0.40  # Umbral más bajo para mostrar
-        should_execute = confidence_score >= 0.65  # Umbral alto para ejecución
+        # Decisiones (LOW < 0.60 descartada, MEDIUM 0.60-0.66 manual, HIGH >= 0.67 auto)
+        should_show = confidence_score >= 0.60  # Umbral mínimo para mostrar en Dashboard/App
+        should_execute = confidence_score >= 0.67  # Umbral para auto-ejecución directa en MT5
         
         return ConfidenceResult(
             confidence_level=confidence_level,
@@ -695,8 +694,8 @@ class ConfidenceSystem:
                 'factors': factors,
                 'symbol': symbol,
                 'thresholds': {
-                    'show': 0.40,
-                    'execute': 0.65
+                    'show': 0.60,
+                    'execute': 0.67
                 }
             }
         )

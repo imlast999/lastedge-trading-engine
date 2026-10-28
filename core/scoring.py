@@ -331,17 +331,15 @@ class FlexibleScoring:
         config = self.symbol_config.get(symbol, self.symbol_config['EURUSD'])
         thresholds = config.get('confidence_thresholds', {
             'medium': 0.60,
-            'high': 0.75,
+            'high': 0.67,
             'very_high': 0.85
         })
         
         if score >= thresholds.get('very_high', 0.85):
             return 'VERY_HIGH'
-        elif score >= thresholds.get('high', 0.75):
+        elif score >= thresholds.get('high', 0.67):
             return 'HIGH'
         elif score >= thresholds.get('medium', 0.60):
-            return 'MEDIUM-HIGH'
-        elif score >= 0.50:
             return 'MEDIUM'
         elif score >= 0.30:
             return 'LOW'
