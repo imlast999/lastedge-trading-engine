@@ -49,9 +49,13 @@ Trade Signal (Entry, SL, TP)
 - **Lot Clamping**: Clamped strictly between `symbol_info.volume_min` and `symbol_info.volume_max` in increments of `symbol_info.volume_step`.
 
 ### 2.2 Margin Checker (`core/risk/margin_checker.py`)
-- Calculates required initial margin for the computed volume.
-- Ensures `free_margin > required_margin * margin_safety_buffer` (default 1.25x).
-- Ensures account margin level remains above safety threshold (e.g. `margin_level > 200%`).
+- Calculates required initial margin for the computed volume using `mt5.order_calc_margin()`.
+- Ensures `free_margin >= margin_needed` and account free margin stays above `minimum_free_margin_pct` (default 20.0%).
+- **Broker Exposure Limit (FXLiveCapital Hard Rule)**:
+  - Enforces `max_symbol_margin_pct = 10.0` (Maximum 10% of account balance allocated to margin on any single instrument, taking into account any existing open positions on that symbol).
+  - **Why exactly 10%?** This is the strict regulatory risk rule enforced by **FXLiveCapital** for prop challenge and funded accounts (*"El margen usado en un mismo símbolo no puede superar el 10% del balance de tu cuenta. Un solo lote de más puede costarte la cuenta"*). Breaking this threshold by even 0.01 lots leads to automatic challenge disqualification.
+  - **Auto-Reduction Safeguard**: If a trade's optimal lot size requires > 10% margin (e.g. narrow stop loss leading to high volume), the `MarginChecker` automatically scales down the lot using the configured reduction sequence until the margin strictly complies with the broker's 10% threshold. If even `volume_min` exceeds 10%, the order is cleanly blocked.
+  - **Account Verification & Testing**: Anyone wishing to test or paper-trade these strategies and risk controls on the exact execution environment can register a **completely free demo account without KYC** directly at: [FXLiveCapital Free Demo Registration](https://client.fxlivecapital.com/authentication/registration/IMLAST9992).
 
 ### 2.3 Portfolio Risk (`core/risk/portfolio_risk.py`)
 - Restricts max concurrent open positions across all symbols (default max: 5).

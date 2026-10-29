@@ -39,6 +39,7 @@ class RiskConfig:
     # Protección de margen
     margin_protection_enabled: bool = True
     minimum_free_margin_pct: float = 20.0
+    max_symbol_margin_pct: float = 10.0  # Límite broker FXLiveCapital (máx 10% balance por símbolo)
     allow_auto_reduce_lot: bool = True
     lot_reduction_sequence: List[float] = field(
         default_factory=lambda: [1.0, 0.5, 0.25, 0.12, 0.08, 0.05, 0.03, 0.01]
@@ -99,6 +100,7 @@ def load_risk_config(rules_config_path: Optional[str] = None) -> RiskConfig:
         portfolio_risk_enabled=True,
         margin_protection_enabled=True,
         minimum_free_margin_pct=float(engine_cfg.get("minimum_free_margin_pct", 20.0)),
+        max_symbol_margin_pct=float(engine_cfg.get("max_symbol_margin_pct", 10.0)),
         allow_auto_reduce_lot=bool(engine_cfg.get("allow_auto_reduce_lot", True)),
         lot_reduction_sequence=engine_cfg.get(
             "lot_reduction_sequence", [1.0, 0.5, 0.25, 0.12, 0.08, 0.05, 0.03, 0.01]
@@ -112,10 +114,11 @@ def load_risk_config(rules_config_path: Optional[str] = None) -> RiskConfig:
 
     logger.info(
         "[RiskConfig] Configuración unificada cargada | risk_default=%.2f%% | max_portfolio=%.2f%% "
-        "| margin_min=%.1f%% | auto_reduce=%s | symbol_overrides=%s",
+        "| margin_min=%.1f%% | max_symbol_margin=%.1f%% | auto_reduce=%s | symbol_overrides=%s",
         config.default_risk_pct,
         config.max_portfolio_risk_pct,
         config.minimum_free_margin_pct,
+        config.max_symbol_margin_pct,
         config.allow_auto_reduce_lot,
         list(config.symbol_risk_overrides.keys()),
     )

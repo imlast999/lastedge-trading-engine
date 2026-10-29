@@ -34,6 +34,8 @@ class MarginCheckResult:
     free_margin_pct: float = 0.0 # % del equity que es margen libre
     equity: float = 0.0
     was_reduced: bool = False     # True si el lote fue reducido automáticamente
+    symbol_margin_pct: float = 0.0 # % del balance consumido por el margen de este símbolo
+    max_symbol_margin_pct: float = 10.0 # Límite máximo según regla de broker (10% balance)
 
 
 class MarginChecker:
@@ -52,6 +54,7 @@ class MarginChecker:
         allow_auto_reduce: bool = True,
         reduction_sequence: Optional[List[float]] = None,
         minimum_free_margin_pct: float = 20.0,
+        max_symbol_margin_pct: float = 10.0,
     ):
         """
         Args:
@@ -62,6 +65,7 @@ class MarginChecker:
         self.allow_auto_reduce = allow_auto_reduce
         self.reduction_sequence = reduction_sequence or [1.0, 0.5, 0.25, 0.12, 0.08, 0.05, 0.03, 0.01]
         self.minimum_free_margin_pct = minimum_free_margin_pct
+        self.max_symbol_margin_pct = max_symbol_margin_pct
 
     def check(
         self,
@@ -72,6 +76,7 @@ class MarginChecker:
         vol_min: float = 0.01,
         account_info: Any = None,  # mt5.AccountInfo o dict-like para tests
         symbol_info: Any = None,   # mt5.SymbolInfo o dict-like para tests
+        existing_symbol_margin: float = 0.0,  # Margen ya ocupado por posiciones abiertas en este símbolo
     ) -> MarginCheckResult:
         """
         Verifica si hay margen suficiente y, si no, intenta reducir el lote.
@@ -127,6 +132,7 @@ class MarginChecker:
                 )
 
             requested_lot = lot
+            max_symbol_margin = (balance * (self.max_symbol_margin_pct / 100.0)) if balance > 0 else 0.0
 
             # ── Intentar con lote solicitado, luego con secuencia reducida ────
             lots_to_try = self._build_lot_sequence(lot, vol_min)
@@ -157,8 +163,12 @@ class MarginChecker:
                         was_reduced=(candidate_lot < requested_lot),
                     )
 
-                if margin_needed <= free_margin:
-                    # Este lote cabe en el margen disponible
+                total_symbol_margin = margin_needed + existing_symbol_margin
+                fits_free_margin = (margin_needed <= free_margin)
+                fits_broker_limit = (total_symbol_margin <= max_symbol_margin) if max_symbol_margin > 0 else True
+
+                if fits_free_margin and fits_broker_limit:
+                    # Este lote cabe en el margen disponible y respeta la regla de exposición del broker
                     warnings = []
                     was_reduced = candidate_lot < requested_lot
 
@@ -166,13 +176,15 @@ class MarginChecker:
                         warnings.append(
                             f"Lote reducido automáticamente: "
                             f"{requested_lot:.4f} → {candidate_lot:.4f} "
-                            f"(margen requerido para lote original superaba el disponible)"
+                            f"(ajustado para cumplir margen libre o regla broker {self.max_symbol_margin_pct:.1f}% balance)"
                         )
+
+                    symbol_margin_pct = (total_symbol_margin / balance * 100.0) if balance > 0 else 0.0
 
                     return MarginCheckResult(
                         approved=True,
                         lot=candidate_lot,
-                        reason="Margen suficiente",
+                        reason="Margen suficiente y dentro del límite de exposición del broker",
                         warnings=warnings,
                         requested_lot=requested_lot,
                         margin_required=margin_needed,
@@ -180,12 +192,13 @@ class MarginChecker:
                         free_margin_pct=free_margin_pct,
                         equity=equity,
                         was_reduced=was_reduced,
+                        symbol_margin_pct=symbol_margin_pct,
+                        max_symbol_margin_pct=self.max_symbol_margin_pct,
                     )
                 else:
                     logger.debug(
-                        "[MarginChecker] %s: lot=%.4f requiere %.2f USD de margen, "
-                        "disponible=%.2f USD — intentando lote menor",
-                        symbol, candidate_lot, margin_needed, free_margin
+                        "[MarginChecker] %s: lot=%.4f requiere %.2f USD (total símbolo: %.2f USD / límite %.1f%%: %.2f USD, free: %.2f USD) — intentando lote menor",
+                        symbol, candidate_lot, margin_needed, total_symbol_margin, self.max_symbol_margin_pct, max_symbol_margin, free_margin
                     )
 
                 if not self.allow_auto_reduce:
@@ -197,14 +210,16 @@ class MarginChecker:
                 approved=False,
                 lot=0.0,
                 reason=(
-                    f"Margen insuficiente para {symbol}: "
-                    f"ningún lote de la secuencia de reducción cabe. "
+                    f"Margen insuficiente o regla broker {self.max_symbol_margin_pct:.1f}% excedida para {symbol}: "
+                    f"ningún lote cumple los límites de margen. "
+                    f"Límite símbolo ({self.max_symbol_margin_pct:.1f}% balance): {max_symbol_margin:.2f} USD, "
                     f"Free margin: {free_margin:.2f} USD ({free_margin_pct:.1f}%)"
                 ),
                 requested_lot=requested_lot,
                 free_margin=free_margin,
                 free_margin_pct=free_margin_pct,
                 equity=equity,
+                max_symbol_margin_pct=self.max_symbol_margin_pct,
             )
 
         except Exception as e:

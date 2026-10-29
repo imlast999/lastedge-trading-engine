@@ -58,6 +58,8 @@ class RiskDecision:
     new_trade_risk_pct: float = 0.0
     combined_risk_pct: float = 0.0
     lot_was_reduced: bool = False
+    symbol_margin_pct: float = 0.0
+    max_symbol_margin_pct: float = 10.0
     evaluated_at: str = ""
 
 
@@ -89,6 +91,7 @@ class RiskEngine:
             allow_auto_reduce=config.allow_auto_reduce_lot,
             reduction_sequence=config.lot_reduction_sequence,
             minimum_free_margin_pct=config.minimum_free_margin_pct,
+            max_symbol_margin_pct=config.max_symbol_margin_pct,
         )
         self._portfolio_risk = PortfolioRisk(
             max_portfolio_risk_pct=config.max_portfolio_risk_pct,
@@ -172,8 +175,19 @@ class RiskEngine:
             )
 
         # ──────────────────────────────────────────────────────────────────────
-        # FASE 2: Margin Check
+        # FASE 2: Margin Check & Broker Exposure Limit
         # ──────────────────────────────────────────────────────────────────────
+        existing_symbol_margin = 0.0
+        positions_for_margin = open_positions if open_positions is not None else self._portfolio_risk._get_open_positions()
+        for pos in (positions_for_margin or []):
+            if self._attr(pos, "symbol", "") == symbol:
+                pos_vol = self._float_attr(pos, "volume", 0.0)
+                pos_price = self._float_attr(pos, "price_open", entry)
+                pos_type = "BUY" if int(self._attr(pos, "type", 0)) == 0 else "SELL"
+                m = self._margin_checker._calc_margin(symbol, pos_type, pos_vol, pos_price, symbol_info)
+                if m is not None:
+                    existing_symbol_margin += m
+
         margin_check: MarginCheckResult = self._margin_checker.check(
             symbol=symbol,
             order_type=order_type,
@@ -182,6 +196,7 @@ class RiskEngine:
             vol_min=sizing.vol_min,
             account_info=account_info,
             symbol_info=symbol_info,
+            existing_symbol_margin=existing_symbol_margin,
         )
 
         if not margin_check.approved:
@@ -244,6 +259,8 @@ class RiskEngine:
             new_trade_risk_pct=portfolio.new_trade_risk_pct,
             combined_risk_pct=portfolio.combined_risk_pct,
             lot_was_reduced=margin_check.was_reduced,
+            symbol_margin_pct=margin_check.symbol_margin_pct,
+            max_symbol_margin_pct=margin_check.max_symbol_margin_pct,
             evaluated_at=evaluated_at,
         )
 
@@ -333,12 +350,21 @@ class RiskEngine:
             return None
 
     @staticmethod
-    def _attr(obj: Any, name: str, default: float) -> float:
+    def _attr(obj: Any, name: str, default: Any) -> Any:
         try:
             if isinstance(obj, dict):
                 return obj.get(name, default)
             return getattr(obj, name, default)
         except Exception:
+            return default
+
+    @staticmethod
+    def _float_attr(obj: Any, name: str, default: float) -> float:
+        try:
+            if isinstance(obj, dict):
+                return float(obj.get(name, default))
+            return float(getattr(obj, name, default))
+        except (TypeError, ValueError):
             return default
 
     def reload_config(self):
@@ -347,6 +373,7 @@ class RiskEngine:
         self._margin_checker.allow_auto_reduce = self.config.allow_auto_reduce_lot
         self._margin_checker.reduction_sequence = self.config.lot_reduction_sequence
         self._margin_checker.minimum_free_margin_pct = self.config.minimum_free_margin_pct
+        self._margin_checker.max_symbol_margin_pct = self.config.max_symbol_margin_pct
         self._portfolio_risk.max_portfolio_risk_pct = self.config.max_portfolio_risk_pct
         self._portfolio_risk.enabled = self.config.portfolio_risk_enabled
         logger.info("[RiskEngine] Configuración recargada desde disco")

@@ -271,6 +271,7 @@
     "risk_engine": {
       "max_portfolio_risk_pct": 2.0,
       "minimum_free_margin_pct": 20.0,
+      "max_symbol_margin_pct": 10.0,
       "allow_auto_reduce_lot": true,
       "max_simultaneous_positions": 3,
       "lot_reduction_sequence": [

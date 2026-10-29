@@ -357,6 +357,48 @@ class TestMarginChecker:
         if result.approved and result.was_reduced:
             assert len(result.warnings) > 0, "Debe haber warning sobre la reducción"
 
+    def test_fxlivecapital_max_symbol_margin_rule_auto_reduces(self):
+        """Regla FXLiveCapital: el margen de un símbolo no puede superar el 10% del balance.
+        Si supera el 10%, debe reducir el lote automáticamente hasta cumplir la regla."""
+        checker = self._checker(allow_auto_reduce=True)
+        # Balance = 3,000 USD -> Límite 10% = 300 USD
+        account = make_account_info(balance=3000.0, equity=3000.0, margin_free=2500.0)
+
+        # 0.10 lotes requieren 400 USD (> 300 USD)
+        # 0.05 lotes requieren 200 USD (<= 300 USD -> cabe!)
+        def fake_margin(symbol, order_type, lot, price, symbol_info=None):
+            return lot * 4000.0
+
+        with patch("core.risk.margin_checker.MarginChecker._calc_margin", side_effect=fake_margin):
+            result = checker.check(
+                symbol="XAUUSD", order_type="BUY",
+                lot=0.10, price=2700.0, vol_min=0.01,
+                account_info=account,
+            )
+
+        assert result.approved
+        assert result.was_reduced
+        assert result.lot <= 0.075  # 0.05 o menor
+        assert result.margin_required <= 300.0
+        assert result.symbol_margin_pct <= 10.0
+
+    def test_fxlivecapital_max_symbol_margin_blocks_when_min_lot_exceeds(self):
+        """Si incluso el lote mínimo supera el 10% del balance permitido por el broker, debe bloquearse."""
+        checker = self._checker(allow_auto_reduce=True)
+        # Balance = 1,000 USD -> Límite 10% = 100 USD
+        account = make_account_info(balance=1000.0, equity=1000.0, margin_free=900.0)
+
+        # Lote mínimo 0.01 requiere 150 USD (> 100 USD)
+        with patch("core.risk.margin_checker.MarginChecker._calc_margin", return_value=150.0):
+            result = checker.check(
+                symbol="XAUUSD", order_type="BUY",
+                lot=0.01, price=2700.0, vol_min=0.01,
+                account_info=account,
+            )
+
+        assert not result.approved
+        assert "broker" in result.reason.lower() or "10.0%" in result.reason
+
 
 # ══════════════════════════════════════════════════════════════════════════════
 # Tests de PortfolioRisk

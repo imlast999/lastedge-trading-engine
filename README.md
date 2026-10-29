@@ -5,13 +5,13 @@
 # LastEdge Trading Engine
 
 [![Trading Engine CI](https://github.com/imlast999/lastedge-trading-engine/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/imlast999/lastedge-trading-engine/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Tests-108%2F108%20Passed-success)](https://github.com/imlast999/lastedge-trading-engine)
+[![Tests](https://img.shields.io/badge/Tests-110%2F110%20Passed-success)](https://github.com/imlast999/lastedge-trading-engine)
 [![Risk Engine](https://img.shields.io/badge/Risk%20Engine-v2%20Active-blue)](https://github.com/imlast999/lastedge-trading-engine)
 
 > **Repository:** [`imlast999/lastedge-trading-engine`](https://github.com/imlast999/lastedge-trading-engine)  
 > **Role:** Production Execution Engine, Risk Engine v2, Dynamic Strategy Loader & MT5 Driver  
 > **Status:** Production Ready  
-> **Tests:** 108 / 108 Passed (100% Green)  
+> **Tests:** 110 / 110 Passed (100% Green)  
 
 </div>
 
@@ -77,6 +77,14 @@ Configured dynamically via `rules_config.json` (`GLOBAL_SETTINGS.autonomous_mode
 
 ---
 
+### 🛡️ Broker Hard-Rule Protection: FXLiveCapital 10% Margin Cap
+LastEdge Risk Engine v2 natively enforces the strict **10% maximum margin per symbol rule** required by **FXLiveCapital** for prop challenges:
+- **Rule Definition**: The margin used across all open positions of a single symbol cannot exceed 10% of the current account balance (*"El margen usado en un mismo símbolo no puede superar el 10% del balance de tu cuenta"*).
+- **Automated Safeguard**: If a signal's calculated lot size would breach this threshold (e.g. narrow stop loss), `MarginChecker` automatically scales down the lot volume to comply with the 10% ceiling before placing the order in MT5.
+- **Free Demo Testing**: Anyone wishing to test or paper-trade these strategies with live market feeds on FXLiveCapital without documentation can create a **completely free demo account without KYC** directly here: [Register Free FXLiveCapital Demo](https://client.fxlivecapital.com/authentication/registration/IMLAST9992).
+
+---
+
 ## 3. Ecosystem & Sister Repositories
 
 LastEdge is built as a tri-system decoupled architecture. This repository operates autonomously but integrates cleanly with its sister systems:
@@ -114,7 +122,7 @@ LastEdge Trading Engine/
 │   ├── base.py                     # Canonical BaseStrategy & SignalIntent contract
 │   ├── vault/                      # Proprietary strategy vault
 │   └── private/                    # Local git-ignored custom strategies
-├── tests/                          # 108 automated execution & risk tests
+├── tests/                          # 110 automated execution & risk tests
 └── docs/                           # Engine technical documentation
 ```
 
@@ -126,7 +134,7 @@ LastEdge Trading Engine/
 # Run all Trading Engine tests locally
 python -m pytest tests/ -v
 ```
-Current test suite status: **108 / 108 passed (100% Green)**.
+Current test suite status: **110 / 110 passed (100% Green)**.
 
 ### CI / Continuous Integration:
 - **Trading Engine CI**: Automated on every push and pull request via [GitHub Actions](.github/workflows/ci.yml).
