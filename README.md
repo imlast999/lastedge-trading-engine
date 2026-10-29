@@ -79,7 +79,7 @@ Configured dynamically via `rules_config.json` (`GLOBAL_SETTINGS.autonomous_mode
 
 ### 🛡️ Broker Hard-Rule Protection: FXLiveCapital 10% Margin Cap
 LastEdge Risk Engine v2 natively enforces the strict **10% maximum margin per symbol rule** required by **FXLiveCapital** for prop challenges:
-- **Rule Definition**: The margin used across all open positions of a single symbol cannot exceed 10% of the current account balance (*"El margen usado en un mismo símbolo no puede superar el 10% del balance de tu cuenta"*).
+- **Rule Definition**: The margin used across all open positions of a single symbol cannot exceed 10% of the current account balance (*"Margin used on a single symbol cannot exceed 10% of your account balance"*).
 - **Automated Safeguard**: If a signal's calculated lot size would breach this threshold (e.g. narrow stop loss), `MarginChecker` automatically scales down the lot volume to comply with the 10% ceiling before placing the order in MT5.
 - **Free Demo Testing**: Anyone wishing to test or paper-trade these strategies with live market feeds on FXLiveCapital without documentation can create a **completely free demo account without KYC** directly here: [Register Free FXLiveCapital Demo](https://client.fxlivecapital.com/authentication/registration/IMLAST9992).
 
