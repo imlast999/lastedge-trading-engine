@@ -44,9 +44,24 @@ jobs:
           python -c "from strategies.base import BaseStrategy, StrategyMetadata; from core.risk.engine import RiskEngine; print('Strategy Contract & Risk Engine Verified')"
 
       - name: Run Test Suite (110 Tests)
+        id: run_tests
         env:
           PYTHONPATH: .
           MT5_OFFLINE_MODE: "1"
           LOG_LEVEL: ERROR
         run: |
-          pytest tests/ -v --tb=short
+          set +e
+          pytest tests/ -v --tb=short > test_out.log 2>&1
+          PYTEST_EXIT=$?
+          cat test_out.log
+          if [ $PYTEST_EXIT -ne 0 ]; then
+            python -c "
+          lines = open('test_out.log', 'r', errors='ignore').read().splitlines()
+          tail = '
+'.join(lines[-50:])
+          clean = tail.replace('%', '%25').replace('', '').replace('
+', '%0A')
+          print(f'::error title=Pytest Log (Exit Code {PYTEST_EXIT})::{clean}')
+          "
+            exit $PYTEST_EXIT
+          fi
