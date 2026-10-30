@@ -183,7 +183,14 @@ class RiskEngine:
             if self._attr(pos, "symbol", "") == symbol:
                 pos_vol = self._float_attr(pos, "volume", 0.0)
                 pos_price = self._float_attr(pos, "price_open", entry)
-                pos_type = "BUY" if int(self._attr(pos, "type", 0)) == 0 else "SELL"
+                raw_type = self._attr(pos, "type", 0)
+                if isinstance(raw_type, str):
+                    pos_type = "SELL" if "SELL" in raw_type.upper() else "BUY"
+                else:
+                    try:
+                        pos_type = "BUY" if int(raw_type) == 0 else "SELL"
+                    except Exception:
+                        pos_type = "BUY"
                 m = self._margin_checker._calc_margin(symbol, pos_type, pos_vol, pos_price, symbol_info)
                 if m is not None:
                     existing_symbol_margin += m
