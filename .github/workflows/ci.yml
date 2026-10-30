@@ -43,9 +43,10 @@ jobs:
         run: |
           python -c "from strategies.base import BaseStrategy, StrategyMetadata; from core.risk.engine import RiskEngine; print('Strategy Contract & Risk Engine Verified')"
 
-      - name: Run Test Suite (69 Tests)
+      - name: Run Test Suite (110 Tests)
         env:
           PYTHONPATH: .
+          MT5_OFFLINE_MODE: "1"
           LOG_LEVEL: ERROR
         run: |
           pytest tests/ -v --tb=short
