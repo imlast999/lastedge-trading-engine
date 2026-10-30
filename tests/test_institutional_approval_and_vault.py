@@ -31,9 +31,88 @@ from services.bot_service import BotService
 from services.autosignals import AutoSignalsService
 from services.api_server import TradingAPIServer
 
-from strategies.vault.btceur_trend_surge import BTCEURTrendSurgeStrategy
-from strategies.vault.xauusd_surge import XAUUSDSurgeStrategy
-from strategies.vault.eurusd_flow import EURUSDFlowStrategy
+try:
+    from strategies.vault.btceur_trend_surge import BTCEURTrendSurgeStrategy
+    from strategies.vault.xauusd_surge import XAUUSDSurgeStrategy
+    from strategies.vault.eurusd_flow import EURUSDFlowStrategy
+except (ImportError, ModuleNotFoundError):
+    # Strategy vault is proprietary and intentionally excluded from the public git repository.
+    # Provide conforming test stubs when running in CI environments without the private vault.
+    from strategies.base import BaseStrategy, StrategyMetadata
+
+    class BTCEURTrendSurgeStrategy(BaseStrategy):
+        def __init__(self):
+            super().__init__("BTCEUR_Trend_Surge")
+            self.strategy_name = "btceur_trend_surge"
+
+        @property
+        def metadata(self) -> StrategyMetadata:
+            return StrategyMetadata(
+                required_history=850,
+                symbol="BTCEUR",
+                timeframe="H1",
+                strategy_name="btceur_trend_surge",
+                version="1.0",
+            )
+
+        def _add_specific_indicators(self, df):
+            return df
+
+        def _get_default_config(self):
+            return {}
+
+        def detect_setup(self, df):
+            if len(df) < self.metadata.required_history:
+                return None
+            return None
+
+    class XAUUSDSurgeStrategy(BaseStrategy):
+        def __init__(self):
+            super().__init__("XAUUSD_Surge")
+            self.strategy_name = "xauusd_surge"
+
+        @property
+        def metadata(self) -> StrategyMetadata:
+            return StrategyMetadata(
+                required_history=200,
+                symbol="XAUUSD",
+                timeframe="H1",
+                strategy_name="xauusd_surge",
+                version="1.0",
+            )
+
+        def _add_specific_indicators(self, df):
+            return df
+
+        def _get_default_config(self):
+            return {}
+
+        def detect_setup(self, df):
+            return None
+
+    class EURUSDFlowStrategy(BaseStrategy):
+        def __init__(self):
+            super().__init__("EURUSD_Flow")
+            self.strategy_name = "eurusd_flow"
+
+        @property
+        def metadata(self) -> StrategyMetadata:
+            return StrategyMetadata(
+                required_history=200,
+                symbol="EURUSD",
+                timeframe="H1",
+                strategy_name="eurusd_flow",
+                version="1.0",
+            )
+
+        def _add_specific_indicators(self, df):
+            return df
+
+        def _get_default_config(self):
+            return {}
+
+        def detect_setup(self, df):
+            return None
 
 
 class TestInstitutionalApprovalAndVault(unittest.TestCase):

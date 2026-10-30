@@ -66,3 +66,100 @@ if 'discord' not in sys.modules:
         sys.modules['discord'] = discord_mock
         sys.modules['discord.ext'] = MagicMock()
         sys.modules['discord.ext.commands'] = MagicMock()
+
+# Mock private strategy vault if absent (e.g. public repository CI)
+if 'strategies.vault' not in sys.modules:
+    try:
+        import strategies.vault
+    except (ImportError, ModuleNotFoundError):
+        import types
+        from strategies.base import BaseStrategy, StrategyMetadata
+
+        vault_mod = types.ModuleType("strategies.vault")
+        sys.modules["strategies.vault"] = vault_mod
+
+        class _StubBTCEURTrendSurge(BaseStrategy):
+            def __init__(self):
+                super().__init__("BTCEUR_Trend_Surge")
+                self.strategy_name = "btceur_trend_surge"
+
+            @property
+            def metadata(self) -> StrategyMetadata:
+                return StrategyMetadata(
+                    required_history=850,
+                    symbol="BTCEUR",
+                    timeframe="H1",
+                    strategy_name="btceur_trend_surge",
+                    version="1.0",
+                )
+
+            def _add_specific_indicators(self, df):
+                return df
+
+            def _get_default_config(self):
+                return {}
+
+            def detect_setup(self, df):
+                if len(df) < self.metadata.required_history:
+                    return None
+                return None
+
+        class _StubXAUUSDSurge(BaseStrategy):
+            def __init__(self):
+                super().__init__("XAUUSD_Surge")
+                self.strategy_name = "xauusd_surge"
+
+            @property
+            def metadata(self) -> StrategyMetadata:
+                return StrategyMetadata(
+                    required_history=200,
+                    symbol="XAUUSD",
+                    timeframe="H1",
+                    strategy_name="xauusd_surge",
+                    version="1.0",
+                )
+
+            def _add_specific_indicators(self, df):
+                return df
+
+            def _get_default_config(self):
+                return {}
+
+            def detect_setup(self, df):
+                return None
+
+        class _StubEURUSDFlow(BaseStrategy):
+            def __init__(self):
+                super().__init__("EURUSD_Flow")
+                self.strategy_name = "eurusd_flow"
+
+            @property
+            def metadata(self) -> StrategyMetadata:
+                return StrategyMetadata(
+                    required_history=200,
+                    symbol="EURUSD",
+                    timeframe="H1",
+                    strategy_name="eurusd_flow",
+                    version="1.0",
+                )
+
+            def _add_specific_indicators(self, df):
+                return df
+
+            def _get_default_config(self):
+                return {}
+
+            def detect_setup(self, df):
+                return None
+
+        m1 = types.ModuleType("strategies.vault.btceur_trend_surge")
+        m1.BTCEURTrendSurgeStrategy = _StubBTCEURTrendSurge
+        sys.modules["strategies.vault.btceur_trend_surge"] = m1
+
+        m2 = types.ModuleType("strategies.vault.xauusd_surge")
+        m2.XAUUSDSurgeStrategy = _StubXAUUSDSurge
+        sys.modules["strategies.vault.xauusd_surge"] = m2
+
+        m3 = types.ModuleType("strategies.vault.eurusd_flow")
+        m3.EURUSDFlowStrategy = _StubEURUSDFlow
+        sys.modules["strategies.vault.eurusd_flow"] = m3
