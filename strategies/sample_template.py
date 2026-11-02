@@ -31,6 +31,11 @@ class SampleBreakoutStrategy(BaseStrategy):
     strategy_name = "SampleBreakout"
     version = "1.0.0"
 
+    # Weekend Exposure Guard (Friday Market Close / Flat Rule)
+    # True (default para Forex/Oro): cierra posiciones viernes 21:30 UTC y bloquea entradas desde 18:00 UTC.
+    # False (mandatorio para Crypto como BTCEUR): permite operar el fin de semana.
+    weekend_exposure_guard: bool = True
+
     def __init__(self, config: Optional[Dict[str, Any]] = None):
         super().__init__(
             symbol=self.symbol,
@@ -42,7 +47,8 @@ class SampleBreakoutStrategy(BaseStrategy):
             symbol=self.symbol,
             timeframe="H1",
             strategy_name=self.strategy_name,
-            version=self.version
+            version=self.version,
+            weekend_exposure_guard=self.weekend_exposure_guard
         )
         self.fast_period = self.config.get("fast_period", 20)
         self.slow_period = self.config.get("slow_period", 50)

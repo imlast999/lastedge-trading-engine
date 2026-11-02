@@ -42,6 +42,10 @@ class StrategyMetadata:
         Nombre legible de la estrategia.
     version : str
         Versión de la estrategia (para trazabilidad en resultados).
+    weekend_exposure_guard : bool
+        Si está activo (True), cierra operaciones antes del cierre de mercado
+        el viernes (21:30 UTC) y bloquea nuevas entradas viernes tarde (>= 18:00 UTC).
+        Las estrategias de criptomonedas (BTCEUR, BTCUSD) deben fijarlo en False.
     """
 
     def __init__(
@@ -51,6 +55,7 @@ class StrategyMetadata:
         timeframe: str = "H1",
         strategy_name: str = "unnamed",
         version: str = "1.0",
+        weekend_exposure_guard: bool = True,
     ) -> None:
         if required_history < 50:
             raise ValueError(
@@ -60,14 +65,16 @@ class StrategyMetadata:
         self.required_history = required_history
         self.symbol           = symbol
         self.timeframe        = timeframe
-        self.strategy_name    = strategy_name
-        self.version          = version
+        self.strategy_name           = strategy_name
+        self.version                 = version
+        self.weekend_exposure_guard  = bool(weekend_exposure_guard)
 
     def __repr__(self) -> str:
         return (
             f"StrategyMetadata(strategy={self.strategy_name!r}, "
             f"symbol={self.symbol!r}, tf={self.timeframe!r}, "
-            f"required_history={self.required_history}, version={self.version!r})"
+            f"required_history={self.required_history}, version={self.version!r}, "
+            f"weekend_guard={self.weekend_exposure_guard})"
         )
 
 
@@ -89,11 +96,13 @@ def resolve_strategy_metadata(strategy: Optional[object] = None, fallback_requir
     except (TypeError, ValueError):
         required_history = fallback_required_history
 
+    weekend_guard = getattr(strategy, "weekend_exposure_guard", True)
     return StrategyMetadata(
         required_history=max(required_history, fallback_required_history if fallback_required_history is not None else 50),
         symbol=getattr(strategy, "symbol", "UNKNOWN"),
         timeframe=getattr(strategy, "required_timeframe", None) or "H1",
         strategy_name=getattr(strategy, "name", getattr(strategy, "__class__", type(strategy)).__name__),
+        weekend_exposure_guard=weekend_guard,
     )
 
 
@@ -323,6 +332,7 @@ class BaseStrategy(ABC):
     # Estrategias multi-timeframe como btceur_regime_momentum deben
     # declarar 'H4' aquí para que el ReplayEngine descargue los datos correctos.
     required_timeframe: Optional[str] = None
+    weekend_exposure_guard: bool = True
     
     def __init__(self, name: str):
         self.name = name
@@ -347,6 +357,7 @@ class BaseStrategy(ABC):
             symbol="UNKNOWN",
             timeframe=self.required_timeframe or "H1",
             strategy_name=self.name,
+            weekend_exposure_guard=getattr(self, "weekend_exposure_guard", True),
         )
 
     @property

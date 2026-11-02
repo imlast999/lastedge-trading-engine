@@ -24,6 +24,9 @@ class BTCEURStrategy(BaseStrategy):
     Sin confirmaciones múltiples, sin filtros de rango estrictos.
     """
     
+    # Criptomonedas operan 24/7 sin cierre de mercado el fin de semana
+    weekend_exposure_guard: bool = False
+    
     def __init__(self):
         super().__init__("BTCEUR_Simple")
 
@@ -36,6 +39,7 @@ class BTCEURStrategy(BaseStrategy):
             timeframe="H1",
             strategy_name="btceur_simple",
             version="1.0",
+            weekend_exposure_guard=False,
         )
     
     def _get_default_config(self) -> Dict:

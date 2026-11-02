@@ -14,7 +14,7 @@
       "overlap"
     ],
     "avoid_news": true,
-    "description": "eurusd_partial \u2014 partial_close validado (Exit Research jul 2026, run 20260702_225143). PF=1.85, WR=54.1%, MC Ruin=0.0%, Stability=51.73",
+    "description": "eurusd_partial — partial_close validado (Exit Research jul 2026, run 20260702_225143). PF=1.85, WR=54.1%, MC Ruin=0.0%, Stability=51.73",
     "philosophy": "Momentum + Tendencia + Partial Close validado",
     "timeframes": [
       "H1"
@@ -35,7 +35,8 @@
       "medium": 0.6,
       "high": 0.67,
       "very_high": 0.85
-    }
+    },
+    "weekend_exposure_guard": true
   },
   "XAUUSD": {
     "strategy": "xauusd_partial",
@@ -60,7 +61,7 @@
       2100,
       2150
     ],
-    "description": "SIMPLIFICADO: Nivel psicol\u00f3gico \u00b110$ + Mecha >30% + Liquidez",
+    "description": "SIMPLIFICADO: Nivel psicológico ±10$ + Mecha >30% + Liquidez",
     "philosophy": "Fakeouts + Rejection + Liquidez",
     "timeframes": [
       "H1",
@@ -75,7 +76,8 @@
       "medium": 0.6,
       "high": 0.67,
       "very_high": 0.85
-    }
+    },
+    "weekend_exposure_guard": true
   },
   "BTCEUR": {
     "strategy": "btceur_trend_surge",
@@ -105,7 +107,8 @@
       "medium": 0.6,
       "high": 0.67,
       "very_high": 0.85
-    }
+    },
+    "weekend_exposure_guard": false
   },
   "GBPUSD": {
     "strategy": "breakout_confirmation",
@@ -114,7 +117,8 @@
     "max_daily_trades": 2,
     "min_rr_ratio": 2.2,
     "description": "Deshabilitado - Enfoque en 3 pares principales",
-    "priority": "LOW"
+    "priority": "LOW",
+    "weekend_exposure_guard": true
   },
   "USDJPY": {
     "strategy": "scalping_ema",
@@ -123,7 +127,8 @@
     "max_daily_trades": 2,
     "min_rr_ratio": 1.8,
     "description": "Deshabilitado - Enfoque en 3 pares principales",
-    "priority": "LOW"
+    "priority": "LOW",
+    "weekend_exposure_guard": true
   },
   "GLOBAL_SETTINGS": {
     "simplified_system": true,
@@ -141,37 +146,37 @@
       "default_min_score": 0.66,
       "setup_weight": 0.5,
       "confirmations_weight": 0.5,
-      "description": "Setup obligatorio + m\u00ednimo 1 confirmaci\u00f3n v\u00e1lida"
+      "description": "Setup obligatorio + mínimo 1 confirmación válida"
     },
     "frequency_control": {
       "realistic_targets": true,
       "expected_signals_per_day": "8-12 total",
       "distribution": {
-        "EURUSD": "3-4 se\u00f1ales/d\u00eda",
-        "XAUUSD": "2-3 se\u00f1ales/d\u00eda",
-        "BTCEUR": "3-5 se\u00f1ales/d\u00eda"
+        "EURUSD": "3-4 señales/día",
+        "XAUUSD": "2-3 señales/día",
+        "BTCEUR": "3-5 señales/día"
       }
     },
     "market_logic": {
-      "EURUSD": "Breakout + pullback + sesi\u00f3n",
+      "EURUSD": "Breakout + pullback + sesión",
       "XAUUSD": "Fakeouts + rejection + liquidez",
-      "BTCEUR": "Momentum + tendencia + expansi\u00f3n"
+      "BTCEUR": "Momentum + tendencia + expansión"
     },
     "session_definitions": {
       "tokyo": {
         "start": 0,
         "end": 9,
-        "description": "Sesi\u00f3n Asi\u00e1tica"
+        "description": "Sesión Asiática"
       },
       "london": {
         "start": 8,
         "end": 17,
-        "description": "Sesi\u00f3n Europea"
+        "description": "Sesión Europea"
       },
       "newyork": {
         "start": 13,
         "end": 22,
-        "description": "Sesi\u00f3n Americana"
+        "description": "Sesión Americana"
       },
       "overlap": {
         "start": 13,
@@ -285,6 +290,24 @@
         0.01
       ]
     },
-    "autonomous_mode": true
+    "autonomous_mode": true,
+    "weekend_exposure_guard": {
+      "enabled": true,
+      "description": "Friday Flat & Weekend Risk Guard: closes non-crypto positions before Friday close and blocks late entries",
+      "close_day_of_week": 4,
+      "close_hour_utc": 21,
+      "close_minute_utc": 30,
+      "block_new_signals_hour_utc": 18,
+      "block_new_signals_minute_utc": 0,
+      "reopen_day_of_week": 6,
+      "reopen_hour_utc": 22,
+      "reopen_minute_utc": 0,
+      "excluded_symbols": [
+        "BTCEUR",
+        "BTCUSD",
+        "ETHUSD",
+        "SOLUSD"
+      ]
+    }
   }
 }

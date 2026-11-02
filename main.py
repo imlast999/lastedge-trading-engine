@@ -64,9 +64,26 @@ class BackgroundTradingRunner:
                     logger.debug(f"Error en bucle de trailing stops: {ex}")
                 await asyncio.sleep(15)
 
+        async def _weekend_guard_loop():
+            try:
+                from services.weekend_guard import get_weekend_guard
+                weekend_guard = get_weekend_guard()
+            except Exception as e:
+                logger.debug(f"Weekend guard no disponible: {e}")
+                weekend_guard = None
+
+            while self.is_running:
+                try:
+                    if weekend_guard:
+                        weekend_guard.check_and_flatten_positions()
+                except Exception as ex:
+                    logger.debug(f"Error en bucle de weekend guard: {ex}")
+                await asyncio.sleep(20)
+
         tasks = [
             self.autosignals_svc.start_auto_signal_loop(),
             _trailing_stops_loop(),
+            _weekend_guard_loop(),
         ]
 
         try:
@@ -122,6 +139,7 @@ def main():
     auto_exec = "ACTIVADA ✅" if runner.autosignals_svc.config.get('AUTO_EXECUTE_SIGNALS') else "SOLO ALERTAS ⚠️"
     print(f"🔍 Escáner de Mercado: ACTIVO (Pares: {symbols_str} | Intervalo: {interval_s}s)")
     print(f"⚡ Auto-Ejecución MT5: {auto_exec}")
+    print("🛡️ Weekend Exposure Guard: ACTIVO (Viernes 21:30 UTC / Entradas off >= 18:00 UTC)")
     print("=" * 70)
     print("Presiona Ctrl+C para detener el servicio.\n")
     sys.stdout.flush()

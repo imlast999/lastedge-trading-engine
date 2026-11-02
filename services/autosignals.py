@@ -487,6 +487,21 @@ class AutoSignalsService:
                 except Exception as nfe:
                     logger.debug(f"News filter error for {symbol}: {nfe}")
 
+                # WEEKEND EXPOSURE GUARD: block entries on Friday evening / weekend for guarded symbols
+                try:
+                    from services.weekend_guard import get_weekend_guard
+                    wg = get_weekend_guard()
+                    allowed, wg_reason = wg.is_entry_allowed(symbol, strategy_name)
+                    if not allowed:
+                        if self.scan_count % 20 == 1:
+                            log_event(
+                                f"🛡️ [{symbol}] Entrada bloqueada por Weekend Exposure Guard: {wg_reason}",
+                                "INFO", "AUTOSIGNAL"
+                            )
+                        return False
+                except Exception as wge:
+                    logger.debug(f"Weekend guard check error for {symbol}: {wge}")
+
                 # COOLDOWN POR SÍMBOLO: evitar spam del mismo par
                 now = datetime.now(timezone.utc)
                 last_sent = self._last_signal_time.get(symbol)
