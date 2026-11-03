@@ -5,13 +5,13 @@
 # LastEdge Trading Engine
 
 [![Trading Engine CI](https://github.com/imlast999/lastedge-trading-engine/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/imlast999/lastedge-trading-engine/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Tests-110%2F110%20Passed-success)](https://github.com/imlast999/lastedge-trading-engine)
+[![Tests](https://img.shields.io/badge/Tests-117%2F117%20Passed-success)](https://github.com/imlast999/lastedge-trading-engine)
 [![Risk Engine](https://img.shields.io/badge/Risk%20Engine-v2%20Active-blue)](https://github.com/imlast999/lastedge-trading-engine)
 
 > **Repository:** [`imlast999/lastedge-trading-engine`](https://github.com/imlast999/lastedge-trading-engine)  
 > **Role:** Production Execution Engine, Risk Engine v2, Dynamic Strategy Loader & MT5 Driver  
 > **Status:** Production Ready  
-> **Tests:** 110 / 110 Passed (100% Green)  
+> **Tests:** 117 / 117 Passed (100% Green)  
 
 </div>
 
@@ -76,6 +76,14 @@ Configured dynamically via `rules_config.json` (`GLOBAL_SETTINGS.autonomous_mode
 - `POST /api/trading/autonomous-mode`: Toggles or sets mode (`{"mode": "toggle"}` or `{"enabled": true/false}`).
 
 ---
+
+### 🛡️ Weekend Exposure Guard & Market Close Liquidation
+The Trading Engine includes institutional protection against weekend gap risk (e.g. unexpected geopolitical news or central bank announcements while markets are closed):
+- **Automated Friday Liquidation:** Automatically closes positions in traditional financial markets prior to the Friday market session close.
+- **Strategy-Level Granular Control (weekend_exposure_guard: bool):**
+  - **Traditional Markets (XAUUSD, EURUSD):** Set to True. Positions are liquidated cleanly before market close.
+  - **Cryptocurrency (BTCEUR):** Set to False. Cripto assets trade 24/7 without weekend market closures, maintaining swing trend capture uninterrupted.
+- **Fail-Safe Operation:** If MT5 connection experiences temporary network latency during the closing window, the Watchdog and Risk Engine retry order closure until confirmed or execution deadline is met.
 
 ### 🛡️ Broker Hard-Rule Protection: FXLiveCapital 10% Margin Cap
 LastEdge Risk Engine v2 natively enforces the strict **10% maximum margin per symbol rule** required by **FXLiveCapital** for prop challenges:
