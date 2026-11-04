@@ -64,3 +64,25 @@ Trade Signal (Entry, SL, TP)
 ### 2.4 Circuit Breaker (`core/circuit_breaker.py`)
 - **Daily Loss Limit**: If realized + floating daily loss exceeds `3.0%`, all new entries are blocked until the next daily session.
 - **Consecutive Loss Multiplier**: After 2 consecutive losses, dynamically scales down risk multiplier to `0.5x`.
+
+
+---
+
+## 3. Multi-Strategy Simultaneous Execution & Split-Risk Protocol
+
+### 3.1 Operativa Dual en el Mismo Par (Retail Hedging)
+El motor de trading opera sobre cuentas de tipo **Retail Hedging** de MetaTrader 5 (`ACCOUNT_MARGIN_MODE_RETAIL_HEDGING = 2`). Esto permite ejecutar dos estrategias simultáneamente sobre el mismo instrumento (por ejemplo, una estrategia tendencial de retroceso y una estrategia de ruptura de volatilidad en `BTCEUR` o `EURUSD`) con órdenes, tickets y niveles de Stop Loss y Take Profit completamente independientes.
+
+### 3.2 Protocolo de Riesgo Dividido (Split-Risk Protocol: 0.50% / 0.50%)
+Cuando se configuran múltiples estrategias para operar a la par sobre un mismo activo, el gestor de riesgo institucional **NO asigna el 1.0% de riesgo por trade a cada una**. En su lugar, aplica una regla estricta de división de riesgo:
+
+$$\text{Riesgo por Estrategia} = \frac{\text{Riesgo Máximo por Símbolo}}{N} = \frac{1.0\%}{2} = 0.50\%$$
+
+- **Estrategia A (ej. Trend Following / Pullback)**: `risk_per_trade = 0.50%`
+- **Estrategia B (ej. Volatility Breakout / Squeeze)**: `risk_per_trade = 0.50%`
+- **Exposición Máxima Combinada del Símbolo**: `1.00%`
+
+### 3.3 Aislamiento por Magic Numbers y Cero Interferencia
+- Cada estrategia activa recibe un **Magic Number** único en MetaTrader 5 (por ejemplo, `100301` para `btceur_trend_surge` y `100302` para `btceur_volatility_breakout`).
+- El seguimiento de posiciones, movimiento a Break-Even, trailing stops dinámicos y cierres parciales de una estrategia no interfieren ni alteran los tickets de la otra.
+- Si una estrategia está en posición larga (BUY) y la otra detecta una señal corta (SELL), la cuenta mantiene ambas órdenes abiertas con margen cubierto según las reglas de cobertura (*hedged margin*) del broker.

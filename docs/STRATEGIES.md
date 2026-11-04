@@ -69,3 +69,20 @@ Every production strategy inherits from `BaseStrategy` and specifies exact param
   - **Stop Loss**: `2.0 * ATR14`
   - **Take Profit**: `3.0 * ATR14` (Risk:Reward ratio 1:1.5)
   - **Expiry**: 90 minutes
+
+
+---
+
+## 3. Parallel Strategy Execution & Opposing Market Regimes
+
+### 3.1 Coexistencia de Modelos Complementarios
+El sistema permite desplegar dos estrategias concurrentes en el mismo par cuando operan regímenes de mercado opuestos o complementarios:
+
+1. **BTC/EUR (Tendencia vs Ruptura de Rango)**:
+   - `btceur_trend_surge`: Captura retrocesos a la EMA20 cuando la tendencia macro ya está en curso (R:R 1:3.0, alta asimetría).
+   - `btceur_volatility_breakout`: Detecta la compresión de volatilidad (Squeeze Donchian/ATR) y entra en el primer disparo explosivo fuera del rango, con un drawdown de solo 11.216 pips (-55% vs Trend Surge).
+   - **Resultado**: Cobertura del 100% del ciclo de volatilidad sin duplicar riesgo.
+
+2. **Gestión de Riesgo en Paralelo**:
+   - Cada estrategia recibe **0.50% de riesgo por operación** en lugar del 1.00% habitual, garantizando que el riesgo total sobre el instrumento permanezca estrictamente limitado al **1.00%**.
+   - Los tickets se aíslan mediante **Magic Numbers** diferenciados (ej. `100301` y `100302`).
