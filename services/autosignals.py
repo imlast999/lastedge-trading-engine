@@ -734,19 +734,47 @@ class AutoSignalsService:
                     if tg_token and tg_chat_id and auto_approved:
                         from services.telegram_adapter import TelegramAdapter
                         tg_adapter = TelegramAdapter(token=tg_token, chat_id=tg_chat_id)
-                        status_label = "✅ EJECUTADA EN MT5" if exec_success else "🟢 AUTO-APROBADA"
-                        tg_text = (
-                            f"🎯 *SEÑAL {signal_type} {symbol}*\n"
-                            f"━━━━━━━━━━━━━━━━━━\n"
-                            f"🟦 *Entrada:* `{entry:.5f}`\n"
-                            f"🟥 *Stop Loss:* `{sl:.5f}`\n"
-                            f"🟩 *Take Profit:* `{tp:.5f}`\n"
-                            f"⚖️ *R:R Ratio:* `1:{rr_ratio:.2f}`\n"
-                            f"⭐ *Confianza:* *{confidence}* ({score:.2f})\n"
-                            f"⚙️ *Estrategia:* `{strategy_name}`\n"
-                            f"🚀 *Estado:* *{status_label}*\n"
-                            f"⏰ `{datetime.now(timezone.utc).strftime('%H:%M:%S UTC')}`"
-                        )
+                        user_lang = "en"
+                        try:
+                            app_prefs_path = os.path.abspath(
+                                os.path.join(os.path.dirname(__file__), "..", "..", "LastEdge App", "data", "telegram_prefs.json")
+                            )
+                            if os.path.exists(app_prefs_path):
+                                import json
+                                with open(app_prefs_path, "r", encoding="utf-8") as pf:
+                                    prefs = json.load(pf)
+                                    user_lang = prefs.get(str(tg_chat_id), {}).get("language", "en")
+                        except Exception:
+                            user_lang = "en"
+
+                        if user_lang == "es":
+                            status_label = "✅ EJECUTADA EN MT5" if exec_success else "🟢 AUTO-APROBADA"
+                            tg_text = (
+                                f"🎯 *SEÑAL {signal_type} {symbol}*\n"
+                                f"━━━━━━━━━━━━━━━━━━\n"
+                                f"🟦 *Entrada:* `{entry:.5f}`\n"
+                                f"🟥 *Stop Loss:* `{sl:.5f}`\n"
+                                f"🟩 *Take Profit:* `{tp:.5f}`\n"
+                                f"⚖️ *R:R Ratio:* `1:{rr_ratio:.2f}`\n"
+                                f"⭐ *Confianza:* *{confidence}* ({score:.2f})\n"
+                                f"⚙️ *Estrategia:* `{strategy_name}`\n"
+                                f"🚀 *Estado:* *{status_label}*\n"
+                                f"⏰ `{datetime.now(timezone.utc).strftime('%H:%M:%S UTC')}`"
+                            )
+                        else:
+                            status_label = "✅ EXECUTED IN MT5" if exec_success else "🟢 AUTO-APPROVED"
+                            tg_text = (
+                                f"🎯 *{signal_type} SIGNAL — {symbol}*\n"
+                                f"━━━━━━━━━━━━━━━━━━\n"
+                                f"🟦 *Entry:* `{entry:.5f}`\n"
+                                f"🟥 *Stop Loss:* `{sl:.5f}`\n"
+                                f"🟩 *Take Profit:* `{tp:.5f}`\n"
+                                f"⚖️ *R:R Ratio:* `1:{rr_ratio:.2f}`\n"
+                                f"⭐ *Confidence:* *{confidence}* ({score:.2f})\n"
+                                f"⚙️ *Strategy:* `{strategy_name}`\n"
+                                f"🚀 *Status:* *{status_label}*\n"
+                                f"⏰ `{datetime.now(timezone.utc).strftime('%H:%M:%S UTC')}`"
+                            )
                         # Intentar enviar con gráfico técnico adjunto si chart_helper está disponible
                         chart_sent = False
                         try:
