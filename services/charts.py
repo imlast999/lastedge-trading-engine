@@ -168,19 +168,19 @@ def generate_chart(df, symbol='EURUSD', signal=None, filename=None, title=None, 
             
             if signal.get('entry') is not None:
                 lines.append(float(signal.get('entry')))
-                colors.append('#00ff00')  # Bright green for entry
+                colors.append('#38bdf8')  # Sky Blue for entry
                 linestyles.append('--')
                 linewidths.append(2)
                 
             if signal.get('sl') is not None:
                 lines.append(float(signal.get('sl')))
-                colors.append('#ff0000')  # Red for stop loss
+                colors.append('#f43f5e')  # Red for stop loss
                 linestyles.append('--')
                 linewidths.append(2)
                 
             if signal.get('tp') is not None:
                 lines.append(float(signal.get('tp')))
-                colors.append('#0080ff')  # Blue for take profit
+                colors.append('#10b981')  # Emerald Green for take profit
                 linestyles.append('--')
                 linewidths.append(2)
                 
@@ -258,13 +258,13 @@ def generate_chart(df, symbol='EURUSD', signal=None, filename=None, title=None, 
             # Add signal lines
             if signal:
                 if signal.get('entry') is not None:
-                    ax.axhline(signal.get('entry'), color='#00ff00', 
+                    ax.axhline(signal.get('entry'), color='#38bdf8', 
                               linestyle='--', linewidth=2, alpha=0.8, label='Entry')
                 if signal.get('sl') is not None:
-                    ax.axhline(signal.get('sl'), color='#ff0000', 
+                    ax.axhline(signal.get('sl'), color='#f43f5e', 
                               linestyle='--', linewidth=2, alpha=0.8, label='Stop Loss')
                 if signal.get('tp') is not None:
-                    ax.axhline(signal.get('tp'), color='#0080ff', 
+                    ax.axhline(signal.get('tp'), color='#10b981', 
                               linestyle='--', linewidth=2, alpha=0.8, label='Take Profit')
             
             # Styling

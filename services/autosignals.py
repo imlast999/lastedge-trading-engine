@@ -738,9 +738,9 @@ class AutoSignalsService:
                         tg_text = (
                             f"🎯 *SEÑAL {signal_type} {symbol}*\n"
                             f"━━━━━━━━━━━━━━━━━━\n"
-                            f"📈 *Entrada:* `{entry:.5f}`\n"
-                            f"🛡️ *Stop Loss:* `{sl:.5f}`\n"
-                            f"🎯 *Take Profit:* `{tp:.5f}`\n"
+                            f"🟦 *Entrada:* `{entry:.5f}`\n"
+                            f"🟥 *Stop Loss:* `{sl:.5f}`\n"
+                            f"🟩 *Take Profit:* `{tp:.5f}`\n"
                             f"⚖️ *R:R Ratio:* `1:{rr_ratio:.2f}`\n"
                             f"⭐ *Confianza:* *{confidence}* ({score:.2f})\n"
                             f"⚙️ *Estrategia:* `{strategy_name}`\n"
