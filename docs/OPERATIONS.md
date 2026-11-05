@@ -61,3 +61,15 @@ Performs:
 - SQLite backup creation (`data/trading.db -> backups/trading_backup_TIMESTAMP.db`).
 - SQLite integrity check (`PRAGMA integrity_check`).
 - Disaster recovery simulation.
+
+
+---
+
+## 4. Official Audited Track Record & Prop Firm Deployment
+
+### 4.1 10K Prop Challenge (FXLiveCapital)
+- **Public Audit Link (Myfxbook Verified):** [LastEdge 10K Challenge](https://www.myfxbook.com/members/imlast999/lastedge-10k-challenge/12296219)
+- **Account Leverage:** 1:100 (Optimal margin headroom for 10% FXLiveCapital rule)
+- **Target Launch Date:** November 13, 2026 (completion of the initial 3-week verification cycle)
+- **Execution Architecture:** Multi-strategy dual execution with split-risk protocol (0.50% / 0.50% per strategy, 1.00% symbol ceiling)
+- **Primary Instruments:** EURUSD (eurusd_partial), XAUUSD (xauusd_partial), BTCEUR (tceur_trend_surge + tceur_volatility_breakout hedge)
