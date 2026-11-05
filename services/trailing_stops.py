@@ -504,6 +504,7 @@ class TrailingStopManager:
                 elif sym_info.filling_mode & 1:
                     filling_mode = mt5.ORDER_FILLING_FOK
 
+            from services.order_tagger import OrderTagger
             request = {
                 "action": mt5.TRADE_ACTION_DEAL,
                 "position": ticket,
@@ -512,8 +513,8 @@ class TrailingStopManager:
                 "type": order_type,
                 "price": exec_price,
                 "deviation": 20,
-                "magic": 234000,
-                "comment": "Partial close - trailing stop",
+                "magic": getattr(position, 'magic', 234000) or 234000,
+                "comment": OrderTagger.generate_partial_close_comment(50),
                 "type_time": mt5.ORDER_TIME_GTC,
                 "type_filling": filling_mode,
             }

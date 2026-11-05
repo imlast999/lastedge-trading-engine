@@ -563,10 +563,14 @@ class ExecutionService:
                       min(self.execution_config['max_lot_size'], lot_size))
     
     def _prepare_order_request(self, signal: Dict, lot_size: float) -> Dict:
-        """Prepara la request de orden para MT5"""
+        """Prepara la request de orden para MT5 con tagger dinámico institucional"""
+        from services.order_tagger import OrderTagger
         symbol = signal['symbol']
         order_type = mt5.ORDER_TYPE_BUY if signal['type'] == 'BUY' else mt5.ORDER_TYPE_SELL
         
+        magic_num = OrderTagger.generate_magic_number(signal, self.execution_config.get('magic_number', 123456))
+        comment_str = OrderTagger.generate_entry_comment(signal)
+
         request = {
             'action': mt5.TRADE_ACTION_DEAL,
             'symbol': symbol,
@@ -575,8 +579,8 @@ class ExecutionService:
             'price': float(signal['entry']),
             'sl': float(signal['sl']),
             'deviation': self.execution_config['max_slippage'],
-            'magic': 0,
-            'comment': f"Bot: {signal.get('strategy', 'unknown')}",
+            'magic': magic_num,
+            'comment': comment_str,
             'type_time': mt5.ORDER_TIME_GTC,
             'type_filling': mt5.ORDER_FILLING_IOC,
         }
