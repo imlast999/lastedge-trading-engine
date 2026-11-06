@@ -247,6 +247,17 @@ class EURUSDAdvancedStrategy(BaseStrategy):
     
     def __init__(self):
         super().__init__("EURUSD_Advanced")
+
+    @property
+    def metadata(self):
+        from strategies.base import StrategyMetadata
+        return StrategyMetadata(
+            required_history=200,
+            symbol="EURUSD",
+            timeframe="H1",
+            strategy_name="eurusd_advanced",
+            version="2.0",
+        )
     
     def _get_default_config(self) -> Dict:
         return {

@@ -205,6 +205,17 @@ class XAUUSDReversalStrategy(BaseStrategy):
     
     def __init__(self):
         super().__init__("XAUUSD_Reversal")
+
+    @property
+    def metadata(self):
+        from strategies.base import StrategyMetadata
+        return StrategyMetadata(
+            required_history=200,
+            symbol="XAUUSD",
+            timeframe="H1",
+            strategy_name="xauusd_reversal",
+            version="2.0",
+        )
     
     def _get_default_config(self) -> Dict:
         return {
@@ -569,6 +580,17 @@ class XAUUSDMomentumStrategy(BaseStrategy):
     
     def __init__(self):
         super().__init__("XAUUSD_Momentum")
+
+    @property
+    def metadata(self):
+        from strategies.base import StrategyMetadata
+        return StrategyMetadata(
+            required_history=200,
+            symbol="XAUUSD",
+            timeframe="H1",
+            strategy_name="xauusd_momentum",
+            version="2.0",
+        )
     
     def _get_default_config(self) -> Dict:
         return {
