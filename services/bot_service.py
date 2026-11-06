@@ -698,8 +698,8 @@ class BotService:
     def get_upcoming_news(self) -> List[Dict[str, Any]]:
         """Obtiene calendario de noticias de alto impacto."""
         try:
-            from services.news_filter import NewsFilter
-            nf = NewsFilter()
+            from services.news_filter import get_news_filter
+            nf = get_news_filter()
             if hasattr(nf, 'get_upcoming_high_impact_events'):
                 events = nf.get_upcoming_high_impact_events()
                 return events if isinstance(events, list) else []

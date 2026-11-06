@@ -260,6 +260,28 @@ class TrailingStopManager:
             if not trail_info['breakeven_moved'] and should_move_be:
                 self._execute_breakeven(position, trail_info)
 
+            # ── ACTIVE TRADE GUARD (Pre-News Position Shield) ───────────────
+            # Proactively shifts SL to Break-Even if Tier-1 news is approaching within 15 minutes and position is profitable
+            if not trail_info.get('breakeven_moved', False):
+                try:
+                    from services.news_filter import get_news_filter
+                    news_filter = get_news_filter()
+                    prot = news_filter.get_position_news_protection(
+                        symbol=symbol,
+                        open_price=entry_price,
+                        current_price=current_price,
+                        current_sl=float(getattr(position, 'sl', 0.0) or 0.0),
+                        pos_type=trade_type,
+                        window_minutes=15
+                    )
+                    if prot.get('action') == 'LOCK_BREAKEVEN':
+                        logger.warning(
+                            f"🛡️ [Active Trade Guard] Ticket #{ticket} ({symbol}): {prot['reason']}"
+                        )
+                        self._execute_breakeven(position, trail_info)
+                except Exception as npe:
+                    logger.debug(f"Active trade guard check error for ticket {ticket}: {npe}")
+
             # ── Trailing Stop Activación Temprana ───────────────────────────
             if not trail_info['trailing_active'] and should_start_trail:
                 trail_info['trailing_active'] = True

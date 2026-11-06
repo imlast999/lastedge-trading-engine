@@ -476,16 +476,26 @@ class AutoSignalsService:
                         )
                     return False
 
-                # NEWS FILTER: pause during high-impact news blackout windows
+                # NEWS FILTER & DYNAMIC SPREAD GUARD: pause during high-impact news blackout windows or abnormal spread spikes
                 try:
-                    from services.news_filter import NewsFilter
-                    news_filter = NewsFilter()
+                    from services.news_filter import get_news_filter
+                    news_filter = get_news_filter()
                     is_blackout, blackout_reason = news_filter.is_news_blackout(symbol)
                     if is_blackout:
                         logger.debug(f"[{symbol}] News blackout: {blackout_reason}")
                         return False
+
+                    spread_ok, spread_reason, cur_sp, max_sp = news_filter.is_spread_acceptable(symbol)
+                    if not spread_ok:
+                        if self.scan_count % 10 == 1:
+                            log_event(
+                                f"🛡️ [{symbol}] Spread guard blocked entry: {spread_reason}",
+                                "WARNING", "SPREAD_GUARD"
+                            )
+                        logger.warning(f"[{symbol}] Spread guard blocked entry: {spread_reason}")
+                        return False
                 except Exception as nfe:
-                    logger.debug(f"News filter error for {symbol}: {nfe}")
+                    logger.debug(f"News / Spread filter error for {symbol}: {nfe}")
 
                 # WEEKEND EXPOSURE GUARD: block entries on Friday evening / weekend for guarded symbols
                 try:
