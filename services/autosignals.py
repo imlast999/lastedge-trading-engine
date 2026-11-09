@@ -807,8 +807,9 @@ class AutoSignalsService:
                                 "entry": entry,
                                 "sl": sl,
                                 "tp": tp,
-                                "timeframe": getattr(best_plan, "timeframe", "H1")
-                            })
+                                "timeframe": getattr(best_plan, "timeframe", "H1"),
+                                "projection_mode": True
+                            }, projection_mode=True)
                         except Exception as chart_err:
                             logger.debug(f"[AutoSignals] No se pudo generar chart adjunto: {chart_err}")
 
