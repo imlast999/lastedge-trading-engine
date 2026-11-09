@@ -71,26 +71,35 @@ class NotificationDispatcher:
             tasks.append(_send_discord())
 
         # 2. Enviar a Telegram si están configuradas las credenciales
-        if self.telegram_token and self.telegram_chat_id:
-            async def _send_telegram():
-                try:
-                    url = f"https://api.telegram.org/bot{self.telegram_token}/sendMessage"
-                    clean_text = full_text.replace("**", "*")  # Telegram Markdown style
-                    payload = {
-                        "chat_id": self.telegram_chat_id,
-                        "text": clean_text,
-                        "parse_mode": "Markdown",
-                    }
-                    session = await self._get_session()
-                    async with session.post(url, json=payload, timeout=aiohttp.ClientTimeout(total=5)) as resp:
-                        if resp.status == 200:
-                            results["telegram"] = True
-                        else:
-                            err_body = await resp.text()
-                            logger.error(f"Error Telegram Bot API HTTP {resp.status}: {err_body}")
-                except Exception as e:
-                    logger.error(f"Error despachando notificación a Telegram: {e}")
-            tasks.append(_send_telegram())
+        tg_token = self.telegram_token or os.getenv("TELEGRAM_BOT_TOKEN")
+        tg_chats = []
+        if self.telegram_chat_id:
+            tg_chats.append(str(self.telegram_chat_id).strip())
+        vip_channel = os.getenv("TELEGRAM_VIP_CHANNEL_ID", "-1004414507559")
+        if vip_channel and str(vip_channel).strip() not in tg_chats:
+            tg_chats.append(str(vip_channel).strip())
+
+        if tg_token and tg_chats:
+            for cid in tg_chats:
+                async def _send_telegram(dest_cid=cid):
+                    try:
+                        url = f"https://api.telegram.org/bot{tg_token}/sendMessage"
+                        clean_text = full_text.replace("**", "*")  # Telegram Markdown style
+                        payload = {
+                            "chat_id": dest_cid,
+                            "text": clean_text,
+                            "parse_mode": "Markdown",
+                        }
+                        session = await self._get_session()
+                        async with session.post(url, json=payload, timeout=aiohttp.ClientTimeout(total=5)) as resp:
+                            if resp.status == 200:
+                                results["telegram"] = True
+                            else:
+                                err_body = await resp.text()
+                                logger.error(f"Error Telegram Bot API HTTP {resp.status} for {dest_cid}: {err_body}")
+                    except Exception as e:
+                        logger.error(f"Error despachando notificación a Telegram ({dest_cid}): {e}")
+                tasks.append(_send_telegram(cid))
 
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)

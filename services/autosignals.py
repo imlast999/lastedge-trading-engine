@@ -741,7 +741,15 @@ class AutoSignalsService:
                 try:
                     tg_token = os.getenv("TELEGRAM_BOT_TOKEN")
                     tg_chat_id = os.getenv("TELEGRAM_CHAT_ID")
-                    if tg_token and tg_chat_id and auto_approved:
+                    tg_vip_channel = os.getenv("TELEGRAM_VIP_CHANNEL_ID", "-1004414507559")
+
+                    dest_chats = []
+                    if tg_chat_id:
+                        dest_chats.append(str(tg_chat_id).strip())
+                    if tg_vip_channel and str(tg_vip_channel).strip() not in dest_chats:
+                        dest_chats.append(str(tg_vip_channel).strip())
+
+                    if tg_token and dest_chats and auto_approved:
                         from services.telegram_adapter import TelegramAdapter
                         tg_adapter = TelegramAdapter(token=tg_token, chat_id=tg_chat_id)
                         user_lang = "en"
@@ -785,8 +793,9 @@ class AutoSignalsService:
                                 f"🚀 *Status:* *{status_label}*\n"
                                 f"⏰ `{datetime.now(timezone.utc).strftime('%H:%M:%S UTC')}`"
                             )
-                        # Intentar enviar con gráfico técnico adjunto si chart_helper está disponible
-                        chart_sent = False
+                        
+                        # Generar gráfico técnico una sola vez
+                        chart_path = None
                         try:
                             import sys
                             app_services_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "LastEdge App"))
@@ -801,14 +810,19 @@ class AutoSignalsService:
                                 "tp": tp,
                                 "timeframe": getattr(best_plan, "timeframe", "H1")
                             })
-                            if chart_path and os.path.exists(chart_path):
-                                await tg_adapter.send_photo(photo_path=chart_path, caption=tg_text)
-                                chart_sent = True
                         except Exception as chart_err:
                             logger.debug(f"[AutoSignals] No se pudo generar chart adjunto: {chart_err}")
 
-                        if not chart_sent:
-                            await tg_adapter.send_message(tg_text)
+                        # Difundir a todos los chats de destino (Privado + Canal VIP)
+                        for cid in dest_chats:
+                            try:
+                                sent_photo = False
+                                if chart_path and os.path.exists(chart_path):
+                                    sent_photo = await tg_adapter.send_photo(photo_path=chart_path, caption=tg_text, chat_id=cid)
+                                if not sent_photo:
+                                    await tg_adapter.send_message(tg_text, chat_id=cid)
+                            except Exception as send_err:
+                                logger.debug(f"[AutoSignals] Error enviando a {cid}: {send_err}")
                 except Exception as tg_err:
                     logger.debug(f"[AutoSignals] Error enviando alerta Telegram: {tg_err}")
                 
