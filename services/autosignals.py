@@ -765,34 +765,33 @@ class AutoSignalsService:
                         except Exception:
                             user_lang = "en"
 
-                        if user_lang == "es":
-                            status_label = "✅ EJECUTADA EN MT5" if exec_success else "🟢 AUTO-APROBADA"
-                            tg_text = (
-                                f"🎯 *SEÑAL {signal_type} {symbol}*\n"
-                                f"━━━━━━━━━━━━━━━━━━\n"
-                                f"🟦 *Entrada:* `{entry:.5f}`\n"
-                                f"🟥 *Stop Loss:* `{sl:.5f}`\n"
-                                f"🟩 *Take Profit:* `{tp:.5f}`\n"
-                                f"⚖️ *R:R Ratio:* `1:{rr_ratio:.2f}`\n"
-                                f"⭐ *Confianza:* *{confidence}* ({score:.2f})\n"
-                                f"⚙️ *Estrategia:* `{strategy_name}`\n"
-                                f"🚀 *Estado:* *{status_label}*\n"
-                                f"⏰ `{datetime.now(timezone.utc).strftime('%H:%M:%S UTC')}`"
-                            )
-                        else:
-                            status_label = "✅ EXECUTED IN MT5" if exec_success else "🟢 AUTO-APPROVED"
-                            tg_text = (
-                                f"🎯 *{signal_type} SIGNAL — {symbol}*\n"
-                                f"━━━━━━━━━━━━━━━━━━\n"
-                                f"🟦 *Entry:* `{entry:.5f}`\n"
-                                f"🟥 *Stop Loss:* `{sl:.5f}`\n"
-                                f"🟩 *Take Profit:* `{tp:.5f}`\n"
-                                f"⚖️ *R:R Ratio:* `1:{rr_ratio:.2f}`\n"
-                                f"⭐ *Confidence:* *{confidence}* ({score:.2f})\n"
-                                f"⚙️ *Strategy:* `{strategy_name}`\n"
-                                f"🚀 *Status:* *{status_label}*\n"
-                                f"⏰ `{datetime.now(timezone.utc).strftime('%H:%M:%S UTC')}`"
-                            )
+                        status_label_en = "✅ EXECUTED IN MT5" if exec_success else "🟢 AUTO-APPROVED"
+                        tg_text_en = (
+                            f"🎯 *{signal_type} SIGNAL — {symbol}*\n"
+                            f"━━━━━━━━━━━━━━━━━━\n"
+                            f"🟦 *Entry:* `{entry:.5f}`\n"
+                            f"🟥 *Stop Loss:* `{sl:.5f}`\n"
+                            f"🟩 *Take Profit:* `{tp:.5f}`\n"
+                            f"⚖️ *R:R Ratio:* `1:{rr_ratio:.2f}`\n"
+                            f"⭐ *Confidence:* *{confidence}* ({score:.2f})\n"
+                            f"⚙️ *Strategy:* `{strategy_name}`\n"
+                            f"🚀 *Status:* *{status_label_en}*\n"
+                            f"⏰ `{datetime.now(timezone.utc).strftime('%H:%M:%S UTC')}`"
+                        )
+
+                        status_label_es = "✅ EJECUTADA EN MT5" if exec_success else "🟢 AUTO-APROBADA"
+                        tg_text_es = (
+                            f"🎯 *SEÑAL {signal_type} {symbol}*\n"
+                            f"━━━━━━━━━━━━━━━━━━\n"
+                            f"🟦 *Entrada:* `{entry:.5f}`\n"
+                            f"🟥 *Stop Loss:* `{sl:.5f}`\n"
+                            f"🟩 *Take Profit:* `{tp:.5f}`\n"
+                            f"⚖️ *R:R Ratio:* `1:{rr_ratio:.2f}`\n"
+                            f"⭐ *Confianza:* *{confidence}* ({score:.2f})\n"
+                            f"⚙️ *Estrategia:* `{strategy_name}`\n"
+                            f"🚀 *Estado:* *{status_label_es}*\n"
+                            f"⏰ `{datetime.now(timezone.utc).strftime('%H:%M:%S UTC')}`"
+                        )
                         
                         # Generar gráfico técnico una sola vez
                         chart_path = None
@@ -813,14 +812,16 @@ class AutoSignalsService:
                         except Exception as chart_err:
                             logger.debug(f"[AutoSignals] No se pudo generar chart adjunto: {chart_err}")
 
-                        # Difundir a todos los chats de destino (Privado + Canal VIP)
+                        # Difundir a todos los chats de destino (Privado + Canal VIP siempre en inglés)
                         for cid in dest_chats:
                             try:
+                                is_channel = (str(cid) == str(tg_vip_channel))
+                                selected_text = tg_text_en if (is_channel or user_lang != "es") else tg_text_es
                                 sent_photo = False
                                 if chart_path and os.path.exists(chart_path):
-                                    sent_photo = await tg_adapter.send_photo(photo_path=chart_path, caption=tg_text, chat_id=cid)
+                                    sent_photo = await tg_adapter.send_photo(photo_path=chart_path, caption=selected_text, chat_id=cid)
                                 if not sent_photo:
-                                    await tg_adapter.send_message(tg_text, chat_id=cid)
+                                    await tg_adapter.send_message(selected_text, chat_id=cid)
                             except Exception as send_err:
                                 logger.debug(f"[AutoSignals] Error enviando a {cid}: {send_err}")
                 except Exception as tg_err:
