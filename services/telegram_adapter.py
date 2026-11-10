@@ -83,10 +83,24 @@ class TelegramAdapter:
             ssl_ctx.verify_mode = ssl.CERT_NONE
             connector = aiohttp.TCPConnector(ssl=ssl_ctx)
             async with aiohttp.ClientSession(connector=connector) as session:
-                async with session.post(url, data=form, timeout=aiohttp.ClientTimeout(total=10)) as resp:
-                    return resp.status == 200
+                async with session.post(url, data=form, timeout=aiohttp.ClientTimeout(total=15)) as resp:
+                    if resp.status == 200:
+                        return True
+                    # Reintentar sin parse_mode si falla por formato Markdown
+                    if caption:
+                        form_retry = aiohttp.FormData()
+                        form_retry.add_field("chat_id", str(dest_chat))
+                        form_retry.add_field("caption", caption)
+                        with open(photo_path, "rb") as f:
+                            form_retry.add_field("photo", f.read(), filename=os.path.basename(photo_path), content_type="image/png")
+                        async with session.post(url, data=form_retry, timeout=aiohttp.ClientTimeout(total=15)) as r2:
+                            if r2.status == 200:
+                                return True
+                    err_text = await resp.text()
+                    logger.warning(f"[TelegramAdapter] sendPhoto falló (status {resp.status}): {err_text}")
+                    return False
         except Exception as e:
-            logger.debug(f"[TelegramAdapter] Error enviando imagen: {e}")
+            logger.error(f"[TelegramAdapter] Error enviando imagen: {e}")
             return False
 
 __all__ = ["TelegramAdapter"]

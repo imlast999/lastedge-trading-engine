@@ -796,10 +796,6 @@ class AutoSignalsService:
                         # Generar gráfico técnico una sola vez
                         chart_path = None
                         try:
-                            import sys
-                            app_services_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "LastEdge App"))
-                            if app_services_path not in sys.path:
-                                sys.path.insert(0, app_services_path)
                             from services.chart_helper import get_chart_for_signal
                             chart_path = get_chart_for_signal({
                                 "symbol": symbol,
@@ -810,8 +806,10 @@ class AutoSignalsService:
                                 "timeframe": getattr(best_plan, "timeframe", "H1"),
                                 "projection_mode": True
                             }, projection_mode=True)
+                            if chart_path and os.path.exists(chart_path):
+                                logger.info(f"[AutoSignals] Gráfico generado exitosamente: {chart_path}")
                         except Exception as chart_err:
-                            logger.debug(f"[AutoSignals] No se pudo generar chart adjunto: {chart_err}")
+                            logger.error(f"[AutoSignals] Error generando chart adjunto: {chart_err}", exc_info=True)
 
                         # Difundir a todos los chats de destino (Privado + Canal VIP siempre en inglés)
                         for cid in dest_chats:
@@ -824,9 +822,9 @@ class AutoSignalsService:
                                 if not sent_photo:
                                     await tg_adapter.send_message(selected_text, chat_id=cid)
                             except Exception as send_err:
-                                logger.debug(f"[AutoSignals] Error enviando a {cid}: {send_err}")
+                                logger.warning(f"[AutoSignals] Error enviando a {cid}: {send_err}")
                 except Exception as tg_err:
-                    logger.debug(f"[AutoSignals] Error enviando alerta Telegram: {tg_err}")
+                    logger.error(f"[AutoSignals] Error enviando alerta Telegram: {tg_err}", exc_info=True)
                 
                 return True
                 
