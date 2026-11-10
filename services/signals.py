@@ -76,27 +76,49 @@ STRATEGY_REGISTRY = {
 
 def _get_eurusd_partial():
     try:
-        from strategies.eurusd import EURUSDPartialStrategy
+        from strategies.vault.eurusd import EURUSDPartialStrategy
         return EURUSDPartialStrategy()
-    except Exception as e:
-        logger.warning(f"EURUSDPartialStrategy no disponible: {e}")
-        return get_strategy('EURUSD')
+    except Exception:
+        pass
+    strat = get_strategy('EURUSD')
+    if strat is not None:
+        return strat
+    from strategies.public.eurusd_public_trend import EURUSDPublicTrendStrategy
+    return EURUSDPublicTrendStrategy()
 
 def _get_xauusd_partial():
     try:
-        from strategies.xauusd_partial import XAUUSDPartialStrategy
+        from strategies.vault.xauusd_partial import XAUUSDPartialStrategy
         return XAUUSDPartialStrategy()
-    except Exception as e:
-        logger.warning(f"XAUUSDPartialStrategy no disponible: {e}")
-        return get_strategy('XAUUSD')
+    except Exception:
+        pass
+    try:
+        from strategies.vault.xauusd import XAUUSDPartialStrategy
+        return XAUUSDPartialStrategy()
+    except Exception:
+        pass
+    strat = get_strategy('XAUUSD')
+    if strat is not None:
+        return strat
+    from strategies.public.xauusd_public_breakout import XAUUSDPublicBreakoutStrategy
+    return XAUUSDPublicBreakoutStrategy()
 
 def _get_btceur_partial():
     try:
-        from strategies.btceur_partial import BTCEURPartialStrategy
+        from strategies.vault.btceur_partial import BTCEURPartialStrategy
         return BTCEURPartialStrategy()
-    except Exception as e:
-        logger.warning(f"BTCEURPartialStrategy no disponible: {e}")
-        return get_strategy('BTCEUR')
+    except Exception:
+        pass
+    try:
+        from strategies.vault.btceur_new import BTCEURPartialStrategy
+        return BTCEURPartialStrategy()
+    except Exception:
+        pass
+    strat = get_strategy('BTCEUR')
+    if strat is not None:
+        return strat
+    from strategies.public.btceur_public_momentum import BTCEURPublicMomentumStrategy
+    return BTCEURPublicMomentumStrategy()
 
 def _get_btceur_trend_surge():
     try:
@@ -206,66 +228,55 @@ def _get_xauusd_gsrs():
 
 def _get_btceur_weekly_breakout():
     try:
-        from strategies.btceur_weekly_breakout import BTCEURWeeklyBreakoutStrategy
+        from strategies.vault.archive.btceur_weekly_breakout import BTCEURWeeklyBreakoutStrategy
         return BTCEURWeeklyBreakoutStrategy()
-    except Exception as e:
-        logger.warning(f"BTCEURWeeklyBreakoutStrategy no disponible: {e}")
+    except Exception:
         return get_strategy('BTCEUR')
 
 def _get_btceur_regime_momentum():
     """
     ESTADO: ACTIVADA — requiere H4+Daily (ReplayEngine respeta required_timeframe).
-
-    BTCEURRegimeMomentumStrategy usa datos H4 y Daily para calcular el
-    régimen de mercado. El ReplayEngine ahora detecta el atributo
-    'required_timeframe' de la estrategia y descarga los datos correctos.
     """
     try:
-        from strategies.btceur_regime_momentum import BTCEURRegimeMomentumStrategy
+        from strategies.vault.archive.btceur_regime_momentum import BTCEURRegimeMomentumStrategy
         return BTCEURRegimeMomentumStrategy()
-    except Exception as e:
-        logger.warning(f"BTCEURRegimeMomentumStrategy no disponible: {e}")
+    except Exception:
         return get_strategy('BTCEUR')
 
 def _get_eurusd_advanced():
     try:
-        from strategies.eurusd import EURUSDAdvancedStrategy
+        from strategies.vault.eurusd import EURUSDAdvancedStrategy
         return EURUSDAdvancedStrategy()
-    except Exception as e:
-        logger.warning(f"EURUSDAdvancedStrategy no disponible, usando simple: {e}")
+    except Exception:
         return get_strategy('EURUSD')
 
 def _get_eurusd_mtf():
     try:
-        from strategies.experimental.eurusd_mtf import EURUSDMultiTimeframeStrategy
+        from strategies.vault.archive.experimental.eurusd_mtf import EURUSDMultiTimeframeStrategy
         return EURUSDMultiTimeframeStrategy()
-    except Exception as e:
-        logger.warning(f"EURUSDMultiTimeframeStrategy no disponible: {e}")
+    except Exception:
         return get_strategy('EURUSD')
 
 
 def _get_xauusd_advanced():
     try:
-        from strategies.xauusd import XAUUSDStrategy as XAUUSDReversal
+        from strategies.vault.xauusd import XAUUSDStrategy as XAUUSDReversal
         return XAUUSDReversal()
-    except Exception as e:
-        logger.warning(f"XAUUSDAdvanced no disponible: {e}")
+    except Exception:
         return get_strategy('XAUUSD')
 
 def _get_xauusd_reversal():
     try:
-        from strategies.xauusd import XAUUSDReversalStrategy
+        from strategies.vault.xauusd import XAUUSDReversalStrategy
         return XAUUSDReversalStrategy()
-    except Exception as e:
-        logger.warning(f"XAUUSDReversalStrategy no disponible: {e}")
+    except Exception:
         return get_strategy('XAUUSD')
 
 def _get_xauusd_momentum():
     try:
-        from strategies.xauusd import XAUUSDMomentumStrategy
+        from strategies.vault.xauusd import XAUUSDMomentumStrategy
         return XAUUSDMomentumStrategy()
-    except Exception as e:
-        logger.warning(f"XAUUSDMomentumStrategy no disponible: {e}")
+    except Exception:
         return get_strategy('XAUUSD')
 
 def detect_signal(
