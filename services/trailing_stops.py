@@ -15,6 +15,8 @@ from __future__ import annotations
 import os
 import json
 import logging
+import asyncio
+import threading
 from datetime import datetime, timezone
 from typing import Dict, List, Tuple, Optional, Any
 import MetaTrader5 as mt5
@@ -100,6 +102,7 @@ class TrailingStopManager:
                 'breakeven_moved': False,
                 'trailing_active': False,
                 'partial_closed': False,
+                'last_r_locked_notified': 0.0,
                 'created_at': datetime.now(timezone.utc).isoformat()
             }
             self.active_trails[ticket] = trail_data
@@ -199,6 +202,7 @@ class TrailingStopManager:
                 'breakeven_moved': breakeven_moved,
                 'trailing_active': False,
                 'partial_closed': False,
+                'last_r_locked_notified': 0.0,
                 'created_at': datetime.now(timezone.utc).isoformat()
             }
             self.active_trails[ticket] = trail_data
@@ -338,6 +342,7 @@ class TrailingStopManager:
                         trail_info['current_sl'] = target_sl
                         self._persist_trail(ticket)
                         logger.info(f"✅ Breakeven ejecutado para BUY {ticket} -> SL={target_sl:.5f}")
+                        self._notify_breakeven(ticket, symbol, 'BUY', entry_price, target_sl)
             else:  # SELL
                 target_sl = entry_price - spread_buffer
                 # Solo mover si mejora el SL actual (o si no tenía SL)
@@ -347,6 +352,7 @@ class TrailingStopManager:
                         trail_info['current_sl'] = target_sl
                         self._persist_trail(ticket)
                         logger.info(f"✅ Breakeven ejecutado para SELL {ticket} -> SL={target_sl:.5f}")
+                        self._notify_breakeven(ticket, symbol, 'SELL', entry_price, target_sl)
 
         except Exception as e:
             logger.exception(f"Error ejecutando breakeven para {getattr(position, 'ticket', '?')}: {e}")
@@ -397,6 +403,7 @@ class TrailingStopManager:
                         trail_info['current_sl'] = new_sl
                         self._persist_trail(ticket)
                         logger.info(f"📈 Trailing SL avanzado para BUY {ticket}: {new_sl:.5f} (Dist: {trailing_distance:.4f})")
+                        self._check_and_notify_r_milestone(ticket, symbol, trade_type, trail_info, new_sl)
             else:  # SELL
                 new_sl = current_price + trailing_distance
                 if current_sl == 0.0 or (new_sl < current_sl - min_step):
@@ -404,6 +411,7 @@ class TrailingStopManager:
                         trail_info['current_sl'] = new_sl
                         self._persist_trail(ticket)
                         logger.info(f"📉 Trailing SL avanzado para SELL {ticket}: {new_sl:.5f} (Dist: {trailing_distance:.4f})")
+                        self._check_and_notify_r_milestone(ticket, symbol, trade_type, trail_info, new_sl)
 
         except Exception as e:
             logger.exception(f"Error aplicando trailing logic para {getattr(position, 'ticket', '?')}: {e}")
@@ -552,6 +560,10 @@ class TrailingStopManager:
                     f"✂️ Cierre parcial exitoso para {ticket} ({symbol}): "
                     f"{close_volume} lotes a {exec_price:.5f}"
                 )
+                remaining_vol = max(0.0, position.volume - close_volume)
+                pct_label = int(close_percentage * 100) if close_percentage <= 1.0 else int(close_percentage)
+                trade_dir = "BUY" if position.type == mt5.ORDER_TYPE_BUY else "SELL"
+                self._notify_partial_close(ticket, symbol, trade_dir, close_volume, remaining_vol, exec_price, pct_label)
                 return True
             else:
                 logger.warning(
@@ -608,6 +620,105 @@ class TrailingStopManager:
                 self.db_service.delete_trailing_stop(ticket)
             except Exception as e:
                 logger.debug(f"Error eliminando trail {ticket} de BD: {e}")
+
+    def _broadcast_telegram(self, text: str):
+        """Envía notificación institucional a Telegram (Privado + Canal VIP)."""
+        try:
+            token = os.getenv("TELEGRAM_BOT_TOKEN")
+            if not token:
+                return
+
+            chat_id = os.getenv("TELEGRAM_CHAT_ID")
+            vip_channel = os.getenv("TELEGRAM_VIP_CHANNEL_ID", "-1004414507559")
+            dest_chats = []
+            if chat_id:
+                dest_chats.append(str(chat_id).strip())
+            if vip_channel and str(vip_channel).strip() not in dest_chats:
+                dest_chats.append(str(vip_channel).strip())
+
+            if not dest_chats:
+                return
+
+            async def _send():
+                try:
+                    from services.telegram_adapter import TelegramAdapter
+                    adapter = TelegramAdapter(token=token, chat_id=chat_id)
+                    for cid in dest_chats:
+                        try:
+                            await adapter.send_message(text, chat_id=cid)
+                        except Exception as ex:
+                            logger.debug(f"[TrailingStop Telegram] Error enviando a {cid}: {ex}")
+                except Exception as ex_adapter:
+                    logger.debug(f"[TrailingStop Telegram] Error cargando adapter: {ex_adapter}")
+
+            try:
+                loop = asyncio.get_running_loop()
+                loop.create_task(_send())
+            except RuntimeError:
+                threading.Thread(target=lambda: asyncio.run(_send()), daemon=True).start()
+
+        except Exception as e:
+            logger.debug(f"[TrailingStop Telegram] Excepción en broadcast: {e}")
+
+    def _notify_breakeven(self, ticket: int, symbol: str, trade_type: str, entry_price: float, new_sl: float):
+        time_str = datetime.now(timezone.utc).strftime('%H:%M:%S UTC')
+        icon_dir = "📈" if trade_type == "BUY" else "📉"
+        msg = (
+            f"🛡️ *STOP LOSS MOVED TO BREAK-EVEN*\n"
+            f"━━━━━━━━━━━━━━━━━━\n"
+            f"{icon_dir} *Position:* `{trade_type} {symbol}`\n"
+            f"🎫 *Ticket:* `#{ticket}`\n"
+            f"🟩 *Secured SL:* `{new_sl:.5f}`\n"
+            f"🟦 *Entry Price:* `{entry_price:.5f}`\n"
+            f"🔒 *Protection:* `Risk-Free (0.00% Risk)`\n"
+            f"⏰ `{time_str}`"
+        )
+        self._broadcast_telegram(msg)
+
+    def _notify_partial_close(self, ticket: int, symbol: str, trade_type: str, close_vol: float, remaining_vol: float, exec_price: float, pct: int):
+        time_str = datetime.now(timezone.utc).strftime('%H:%M:%S UTC')
+        icon_dir = "📈" if trade_type == "BUY" else "📉"
+        msg = (
+            f"✂️ *PARTIAL PROFIT SECURED ({pct}%)*\n"
+            f"━━━━━━━━━━━━━━━━━━\n"
+            f"{icon_dir} *Position:* `{trade_type} {symbol}`\n"
+            f"🎫 *Ticket:* `#{ticket}`\n"
+            f"💰 *Closed Volume:* `{close_vol:.2f} Lots @ {exec_price:.5f}`\n"
+            f"🚀 *Runner Remaining:* `{remaining_vol:.2f} Lots (to TP)`\n"
+            f"🛡️ *Protection:* `Stop Loss locked at Break-Even / Profit`\n"
+            f"⏰ `{time_str}`"
+        )
+        self._broadcast_telegram(msg)
+
+    def _check_and_notify_r_milestone(self, ticket: int, symbol: str, trade_type: str, trail_info: dict, new_sl: float):
+        initial_risk = abs(trail_info['entry_price'] - trail_info['original_sl']) if trail_info.get('original_sl', 0) > 0 else 0.0
+        if initial_risk <= 0:
+            return
+
+        entry_p = float(trail_info['entry_price'])
+        locked_r = ((new_sl - entry_p) if trade_type == 'BUY' else (entry_p - new_sl)) / initial_risk
+        last_r = trail_info.get('last_r_locked_notified', 0.0)
+
+        for r_milestone in (1.0, 2.0, 3.0):
+            if locked_r >= r_milestone > last_r:
+                trail_info['last_r_locked_notified'] = r_milestone
+                self._persist_trail(ticket)
+                time_str = datetime.now(timezone.utc).strftime('%H:%M:%S UTC')
+                icon_dir = "📈" if trade_type == "BUY" else "📉"
+                target_tp = float(trail_info.get('original_tp', 0.0))
+                tp_text = f"🎯 *Target TP:* `{target_tp:.5f}`\n" if target_tp > 0 else ""
+                msg = (
+                    f"🔒 *STOP LOSS TRAILED (+{r_milestone:.1f}R PROFIT LOCKED)*\n"
+                    f"━━━━━━━━━━━━━━━━━━\n"
+                    f"{icon_dir} *Position:* `{trade_type} {symbol}`\n"
+                    f"🎫 *Ticket:* `#{ticket}`\n"
+                    f"📈 *New Protected SL:* `{new_sl:.5f}`\n"
+                    f"💰 *Guaranteed Gain:* `+{r_milestone:.1f}R locked`\n"
+                    f"{tp_text}"
+                    f"⏰ `{time_str}`"
+                )
+                self._broadcast_telegram(msg)
+                break
 
     def _get_min_be_price_distance(self, symbol: str) -> float:
         """Distancia mínima de precio para activar Breakeven si no hay SL/TP definidos."""

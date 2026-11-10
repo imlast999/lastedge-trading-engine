@@ -258,3 +258,57 @@ def test_sqlite_persistence_across_instances(temp_db):
     assert loaded['symbol'] == 'BTCEUR'
     assert loaded['breakeven_moved'] is True
     assert loaded['highest_profit'] == 1.15
+
+
+def test_breakeven_and_partial_close_broadcast_telegram(trailing_mgr):
+    """TEST 7: El sistema anuncia adecuadamente Break-Even y Cierre Parcial en Telegram."""
+    trailing_mgr.add_position_to_trail(
+        ticket=999,
+        symbol="EURUSD",
+        entry_price=1.12000,
+        original_sl=1.11800,
+        original_tp=1.12600,
+        trade_type="BUY"
+    )
+
+    mock_pos = MagicMock()
+    mock_pos.ticket = 999
+    mock_pos.symbol = "EURUSD"
+    mock_pos.type = mt5.ORDER_TYPE_BUY
+    mock_pos.price_open = 1.12000
+    mock_pos.price_current = 1.12200
+    mock_pos.sl = 1.11800
+    mock_pos.tp = 1.12600
+    mock_pos.volume = 0.10
+
+    mock_sym = MagicMock()
+    mock_sym.point = 0.00001
+    mock_sym.digits = 5
+    mock_sym.spread = 10
+    mock_sym.stops_level = 5
+    mock_sym.volume_min = 0.01
+    mock_sym.volume_step = 0.01
+
+    broadcast_messages = []
+    with patch.object(trailing_mgr, '_broadcast_telegram', side_effect=lambda msg: broadcast_messages.append(msg)):
+        with patch('MetaTrader5.symbol_info', return_value=mock_sym):
+            with patch.object(trailing_mgr, 'modify_stop_loss', return_value=True):
+                # 1. Ejecutar Breakeven
+                trailing_mgr._execute_breakeven(mock_pos, trailing_mgr.active_trails[999])
+                assert len(broadcast_messages) == 1
+                assert "STOP LOSS MOVED TO BREAK-EVEN" in broadcast_messages[0]
+                assert "EURUSD" in broadcast_messages[0]
+                assert "#999" in broadcast_messages[0]
+
+                # 2. Ejecutar Cierre Parcial
+                mock_order_res = MagicMock()
+                mock_order_res.retcode = mt5.TRADE_RETCODE_DONE
+                with patch('MetaTrader5.positions_get', return_value=[mock_pos]):
+                    with patch('MetaTrader5.symbol_info_tick', return_value=MagicMock(bid=1.12200, ask=1.12210)):
+                        with patch('MetaTrader5.order_send', return_value=mock_order_res):
+                            res = trailing_mgr.partial_close_position(999, 0.50)
+                            assert res is True
+                            assert len(broadcast_messages) == 2
+                            assert "PARTIAL PROFIT SECURED (50%)" in broadcast_messages[1]
+                            assert "EURUSD" in broadcast_messages[1]
+
