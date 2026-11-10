@@ -5,13 +5,13 @@
 # LastEdge Trading Engine
 
 [![Trading Engine CI](https://github.com/imlast999/lastedge-trading-engine/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/imlast999/lastedge-trading-engine/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Tests-117%2F117%20Passed-success)](https://github.com/imlast999/lastedge-trading-engine)
+[![Tests](https://img.shields.io/badge/Tests-132%2F132%20Passed-success)](https://github.com/imlast999/lastedge-trading-engine)
 [![Risk Engine](https://img.shields.io/badge/Risk%20Engine-v2%20Active-blue)](https://github.com/imlast999/lastedge-trading-engine)
 
 > **Repository:** [`imlast999/lastedge-trading-engine`](https://github.com/imlast999/lastedge-trading-engine)  
 > **Role:** Production Execution Engine, Risk Engine v2, Dynamic Strategy Loader & MT5 Driver  
 > **Status:** Production Ready  
-> **Tests:** 117 / 117 Passed (100% Green)  
+> **Tests:** 132 / 132 Passed (100% Green)  
 
 </div>
 
@@ -31,6 +31,9 @@
 - **Sub-Second MT5 Execution**: Ultra-low latency order entry, modification, and partial exits via official MT5 Python API, with high-resolution historical candle queries for technical chart delivery and visual audit.
 - **Risk Engine v2**: Pre-trade position sizing, leverage and margin limit checks, daily drawdown circuit breakers, and dynamic trailing stops.
 - **Signal Confidence Scoring**: Multi-factor quantitative scoring (ATR volatility, RSI momentum, multi-timeframe trend confluency) categorizing signals into deterministic execution tiers.
+- **SpreadGuard & Rollover Protection**: Real-time pre-trade spread evaluation (is_spread_acceptable) preventing entry orders when broker spreads blow out during rollover (22:00 UTC) or high-impact economic releases.
+- **VIP Signals Dual-Broadcasting**: High-concurrency real-time signal dispatch to the private VIP Telegram channel (LastEdge VIP Signals), standardized in institutional English.
+- **TradingView Execution Projection Charts**: Automated generation of Risk/Reward chart projections with dedicated right-margin candles and filled target boxes on new trade execution.
 - **Cryptographic Package Ingestion**: Dynamic verification and loading of promoted strategy packages (`.py` + `.json` sidecars) via `services/strategy_loader.py` with `code_sha256` and `config_hash` validation.
 - **Vault & Private Strategy Support**: Secure isolation of proprietary alpha models in `strategies/vault/` and `strategies/private/`.
 - **Broker Quality Certification**: Real-time measurement and telemetry of average latency, slippage, and fill rate.
@@ -130,7 +133,7 @@ LastEdge Trading Engine/
 │   ├── base.py                     # Canonical BaseStrategy & SignalIntent contract
 │   ├── vault/                      # Proprietary strategy vault
 │   └── private/                    # Local git-ignored custom strategies
-├── tests/                          # 110 automated execution & risk tests
+├── tests/                          # 132 automated execution & risk tests
 └── docs/                           # Engine technical documentation
 ```
 
@@ -142,7 +145,7 @@ LastEdge Trading Engine/
 # Run all Trading Engine tests locally
 python -m pytest tests/ -v
 ```
-Current test suite status: **110 / 110 passed (100% Green)**.
+Current test suite status: **132 / 132 passed (100% Green)**.
 
 ### CI / Continuous Integration:
 - **Trading Engine CI**: Automated on every push and pull request via [GitHub Actions](.github/workflows/ci.yml).

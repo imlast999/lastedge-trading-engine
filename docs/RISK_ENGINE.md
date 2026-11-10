@@ -65,6 +65,11 @@ Trade Signal (Entry, SL, TP)
 - **Daily Loss Limit**: If realized + floating daily loss exceeds `3.0%`, all new entries are blocked until the next daily session.
 - **Consecutive Loss Multiplier**: After 2 consecutive losses, dynamically scales down risk multiplier to `0.5x`.
 
+### 2.5 SpreadGuard & Rollover Blowout Protection (`services/execution.py` / `is_spread_acceptable`)
+- **Real-Time Pre-Trade Check**: Before any order is dispatched to MT5, the engine queries the current live `ask - bid` spread directly from the broker book.
+- **Rollover & Volatility Shield**: During daily bank rollover (21:55 - 22:15 UTC) or major economic releases, broker spreads can expand by 3x-10x, turning positive expected-value signals into instant losses.
+- **Deterministic Blocking**: If `current_spread > max_allowed_spread` for the instrument (e.g. > 2.5 pips on EURUSD or > 50 cents on XAUUSD), order dispatch is rejected immediately with an audit log, eliminating live execution drawdown divergence from backtests.
+
 
 ---
 
