@@ -8,8 +8,9 @@ def test_partial_strategies_are_registered_and_loadable():
     xauusd_strategy = signals.STRATEGY_REGISTRY['xauusd_partial']()
     btceur_strategy = signals.STRATEGY_REGISTRY['btceur_partial']()
 
-    assert xauusd_strategy.__class__.__name__ == 'XAUUSDPartialStrategy'
-    assert btceur_strategy.__class__.__name__ == 'BTCEURPartialStrategy'
+    # Supports both private vault deployment and open-core public benchmark fallback
+    assert xauusd_strategy.__class__.__name__ in ('XAUUSDPartialStrategy', 'XAUUSDPublicBreakoutStrategy')
+    assert btceur_strategy.__class__.__name__ in ('BTCEURPartialStrategy', 'BTCEURPublicMomentumStrategy')
 
     assert strategies_pkg.STRATEGY_REGISTRY['XAUUSD'] is strategies_pkg.XAUUSDPartialStrategy
     assert strategies_pkg.STRATEGY_REGISTRY['BTCEUR'] is strategies_pkg.BTCEURPartialStrategy
