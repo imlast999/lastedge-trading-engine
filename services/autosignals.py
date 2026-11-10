@@ -797,13 +797,16 @@ class AutoSignalsService:
                         chart_path = None
                         try:
                             from services.chart_helper import get_chart_for_signal
+                            chart_timeframe = (
+                                signal.get("timeframe") if isinstance(signal, dict) else None
+                            ) or symbol_config.get("timeframe", "H1") or "H1"
                             chart_path = get_chart_for_signal({
                                 "symbol": symbol,
                                 "type": signal_type,
                                 "entry": entry,
                                 "sl": sl,
                                 "tp": tp,
-                                "timeframe": getattr(best_plan, "timeframe", "H1"),
+                                "timeframe": chart_timeframe,
                                 "projection_mode": True
                             }, projection_mode=True)
                             if chart_path and os.path.exists(chart_path):
