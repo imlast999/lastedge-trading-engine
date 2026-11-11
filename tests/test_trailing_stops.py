@@ -312,3 +312,62 @@ def test_breakeven_and_partial_close_broadcast_telegram(trailing_mgr):
                             assert "PARTIAL PROFIT SECURED (50%)" in broadcast_messages[1]
                             assert "EURUSD" in broadcast_messages[1]
 
+
+def test_ratchet_enforcement_restores_loosened_sl_on_downtime(trailing_mgr):
+    """Verifica que si el SL en la terminal se afloja durante downtime, el motor lo restaura."""
+    trailing_mgr.add_position_to_trail(
+        ticket=777,
+        symbol="EURUSD",
+        entry_price=1.10000,
+        original_sl=1.09500,
+        original_tp=1.11500,
+        trade_type="BUY"
+    )
+    # Simular que el bot ya había movido el SL a 1.10100 (Breakeven con ganancia)
+    trailing_mgr.active_trails[777]['current_sl'] = 1.10100
+    trailing_mgr.active_trails[777]['breakeven_moved'] = True
+
+    # En la terminal viva de MT5, alguien movió el SL hacia atrás a 1.09000 (más laxo)
+    mock_pos = MagicMock()
+    mock_pos.ticket = 777
+    mock_pos.symbol = "EURUSD"
+    mock_pos.type = mt5.ORDER_TYPE_BUY
+    mock_pos.price_open = 1.10000
+    mock_pos.price_current = 1.10300
+    mock_pos.sl = 1.09000  # Aflojado en terminal
+    mock_pos.tp = 1.11500
+    mock_pos.volume = 0.10
+
+    mock_sym = MagicMock(point=0.00001, digits=5, stops_level=5)
+    with patch('MetaTrader5.symbol_info', return_value=mock_sym):
+        with patch.object(trailing_mgr, 'modify_stop_loss', return_value=True) as mock_modify:
+            trailing_mgr.update_single_trailing_stop(mock_pos)
+            # Debe invocar modify_stop_loss restaurando 1.10100
+            mock_modify.assert_called()
+            # Primer llamado de modify debe ser para restaurar el SL persistido
+            assert mock_modify.call_args_list[0][0] == (777, 1.10100)
+
+
+def test_cold_orphan_without_sl_injects_synthetic_sl(trailing_mgr):
+    """Verifica que una huérfana detectada con SL=0.0 reciba un SL sintético de protección inmediato."""
+    mock_pos = MagicMock()
+    mock_pos.ticket = 888
+    mock_pos.symbol = "EURUSD"
+    mock_pos.type = mt5.ORDER_TYPE_BUY
+    mock_pos.price_open = 1.10000
+    mock_pos.sl = 0.0  # Sin protección
+    mock_pos.tp = 0.0
+    mock_pos.volume = 0.10
+
+    mock_sym = MagicMock(point=0.00001, digits=5, stops_level=5)
+    with patch('MetaTrader5.symbol_info', return_value=mock_sym):
+        with patch.object(trailing_mgr, 'modify_stop_loss', return_value=True) as mock_modify:
+            trailing_mgr._adopt_orphan_position(mock_pos)
+            mock_modify.assert_called_once()
+            # Debe haber colocado un SL por debajo de la entrada
+            ticket_arg, sl_arg = mock_modify.call_args[0]
+            assert ticket_arg == 888
+            assert sl_arg < 1.10000
+            assert trailing_mgr.active_trails[888]['current_sl'] == sl_arg
+
+

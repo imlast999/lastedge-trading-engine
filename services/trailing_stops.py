@@ -191,6 +191,18 @@ class TrailingStopManager:
             elif trade_type == 'SELL' and (0 < current_sl <= entry_price):
                 breakeven_moved = True
 
+            # Salvaguarda: si la orden huérfana no tiene SL (naked), calcular e inyectar SL sintético
+            if current_sl == 0.0:
+                default_dist = self._get_default_sl_distance(symbol)
+                if default_dist > 0.0:
+                    synth_sl = (entry_price - default_dist) if trade_type == 'BUY' else (entry_price + default_dist)
+                    logger.warning(
+                        f"🛡️ [Cold Orphan Shield] Posición huérfana #{ticket} ({symbol} {trade_type}) detectada SIN SL. "
+                        f"Inyectando SL sintético de protección @ {synth_sl:.5f}"
+                    )
+                    if self.modify_stop_loss(ticket, synth_sl):
+                        current_sl = synth_sl
+
             trail_data = {
                 'symbol': symbol,
                 'entry_price': entry_price,
@@ -235,6 +247,25 @@ class TrailingStopManager:
                 profit_distance = current_price - entry_price
             else:  # SELL
                 profit_distance = entry_price - current_price
+
+            # ── ENFORCEMENT DEL RATCHET: Restaurar SL si fue aflojado durante downtime ──
+            stored_sl = float(trail_info.get('current_sl', 0.0) or 0.0)
+            live_sl = float(getattr(position, 'sl', 0.0) or 0.0)
+            if stored_sl > 0.0:
+                is_loosened = False
+                if trade_type == 'BUY' and live_sl < (stored_sl - 1e-5):
+                    is_loosened = True
+                elif trade_type == 'SELL' and (live_sl == 0.0 or live_sl > (stored_sl + 1e-5)):
+                    is_loosened = True
+
+                if is_loosened:
+                    logger.warning(
+                        f"🛡️ [Ratchet Enforcement] Ticket #{ticket} ({symbol} {trade_type}): "
+                        f"SL en terminal ({live_sl:.5f}) más laxo que el SL algorítmico persistido ({stored_sl:.5f}). "
+                        f"Restaurando suelo de riesgo..."
+                    )
+                    if self.modify_stop_loss(ticket, stored_sl):
+                        logger.info(f"✅ [Ratchet Enforcement] Ticket #{ticket} restaurado a SL={stored_sl:.5f}")
 
             # Calcular R-múltiplo (beneficio relativo al riesgo inicial)
             initial_risk = abs(entry_price - original_sl) if original_sl > 0 else 0.0
@@ -735,6 +766,22 @@ class TrailingStopManager:
         elif 'BTC' in symbol:
             return 400.0  # 400 EUR/USD
         return 0.0015  # 15 pips
+
+    def _get_default_sl_distance(self, symbol: str) -> float:
+        """Distancia de Stop Loss sintético inicial para huérfanas sin protección previa."""
+        configured_dist = self.price_distances.get(symbol)
+        if configured_dist is not None:
+            return configured_dist * 1.5
+
+        if 'XAU' in symbol or 'GOLD' in symbol:
+            return 8.0  # $8.00 USD en oro
+        elif 'BTC' in symbol:
+            return 800.0  # $800 USD en BTC
+
+        sym_info = mt5.symbol_info(symbol)
+        point = sym_info.point if sym_info else 0.0001
+        pip_multiplier = 10 * point if (sym_info and sym_info.digits in (3, 5)) else point
+        return 30 * pip_multiplier  # 30 pips en Forex
 
 
 # Instancia global del trailing stop manager
