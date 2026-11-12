@@ -660,7 +660,8 @@ class TrailingStopManager:
                 return
 
             chat_id = os.getenv("TELEGRAM_CHAT_ID")
-            vip_channel = os.getenv("TELEGRAM_VIP_CHANNEL_ID", "-1004414507559")
+            vip_enabled = os.getenv("TELEGRAM_VIP_ENABLED", "false").lower() in ("true", "1", "yes")
+            vip_channel = os.getenv("TELEGRAM_VIP_CHANNEL_ID", "").strip() if vip_enabled else ""
             dest_chats = []
             if chat_id:
                 dest_chats.append(str(chat_id).strip())
