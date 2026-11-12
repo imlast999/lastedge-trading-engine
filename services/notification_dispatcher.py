@@ -75,8 +75,10 @@ class NotificationDispatcher:
         tg_chats = []
         if self.telegram_chat_id:
             tg_chats.append(str(self.telegram_chat_id).strip())
-        vip_channel = os.getenv("TELEGRAM_VIP_CHANNEL_ID", "-1004414507559")
-        if vip_channel and str(vip_channel).strip() not in tg_chats:
+        # Optional VIP Channel broadcast (configurable strictly via private .env, no hardcoded IDs)
+        vip_enabled = os.getenv("TELEGRAM_VIP_ENABLED", "true").lower() in ("true", "1", "yes")
+        vip_channel = os.getenv("TELEGRAM_VIP_CHANNEL_ID") if vip_enabled else None
+        if vip_channel and str(vip_channel).strip() and str(vip_channel).strip() not in tg_chats:
             tg_chats.append(str(vip_channel).strip())
 
         if tg_token and tg_chats:

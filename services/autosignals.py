@@ -741,12 +741,14 @@ class AutoSignalsService:
                 try:
                     tg_token = os.getenv("TELEGRAM_BOT_TOKEN")
                     tg_chat_id = os.getenv("TELEGRAM_CHAT_ID")
-                    tg_vip_channel = os.getenv("TELEGRAM_VIP_CHANNEL_ID", "-1004414507559")
+                    # Canal VIP opcional (configurable estrictamente vía .env privado, sin IDs públicas hardcodeadas)
+                    tg_vip_enabled = os.getenv("TELEGRAM_VIP_ENABLED", "true").lower() in ("true", "1", "yes")
+                    tg_vip_channel = os.getenv("TELEGRAM_VIP_CHANNEL_ID") if tg_vip_enabled else None
 
                     dest_chats = []
                     if tg_chat_id:
                         dest_chats.append(str(tg_chat_id).strip())
-                    if tg_vip_channel and str(tg_vip_channel).strip() not in dest_chats:
+                    if tg_vip_channel and str(tg_vip_channel).strip() and str(tg_vip_channel).strip() not in dest_chats:
                         dest_chats.append(str(tg_vip_channel).strip())
 
                     if tg_token and dest_chats and auto_approved:
