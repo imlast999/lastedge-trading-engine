@@ -492,154 +492,10 @@ class TradingEngine:
 
 
 # ============================================================================
-# SISTEMA DE SCORING INTEGRADO (consolidado de signals.py)
+# SISTEMA DE SCORING INTEGRADO (importado de core/scoring.py)
 # ============================================================================
 
-@dataclass
-class ConfirmationRule:
-    """Regla de confirmación con peso y descripción"""
-    name: str
-    weight: float = 1.0
-    description: str = ""
-    critical: bool = False
-
-@dataclass
-class ScoringResult:
-    """Resultado del sistema de scoring"""
-    setup_valid: bool
-    confirmations_passed: int
-    confirmations_total: int
-    final_score: float
-    confidence_level: str
-    should_show: bool
-    details: Dict
-    failed_confirmations: List[str]
-
-class FlexibleScoring:
-    """Sistema de scoring flexible consolidado"""
-    
-    def __init__(self):
-        # Configuración por símbolo
-        self.symbol_config = {
-            'EURUSD': {'min_score': 0.60, 'show_threshold': 0.60, 'setup_weight': 0.4},
-            'XAUUSD': {'min_score': 0.65, 'show_threshold': 0.60, 'setup_weight': 0.5},
-            'BTCEUR': {'min_score': 0.60, 'show_threshold': 0.60, 'setup_weight': 0.4}
-        }
-    
-    def evaluate_signal_context(self, context: SignalContext) -> ScoringResult:
-        """Evalúa señal usando contexto completo"""
-        symbol = context.symbol
-        signal = context.raw_signal
-        df = context.dataframe
-        
-        # Extraer confirmaciones del contexto de la señal
-        confirmations = self._extract_confirmations_from_signal(signal, df, symbol)
-        
-        return self.evaluate_signal(symbol, True, confirmations)
-    
-    def evaluate_signal(self, symbol: str, setup_valid: bool, 
-                       confirmations: List[Tuple[bool, ConfirmationRule]]) -> ScoringResult:
-        """Evalúa una señal usando scoring flexible"""
-        
-        config = self.symbol_config.get(symbol, self.symbol_config['EURUSD'])
-        
-        if not setup_valid:
-            return ScoringResult(
-                setup_valid=False, confirmations_passed=0, confirmations_total=len(confirmations),
-                final_score=0.0, confidence_level='NONE', should_show=False,
-                details={'reason': 'Setup principal no válido'}, failed_confirmations=['SETUP_INVALID']
-            )
-        
-        # Evaluar confirmaciones
-        passed_confirmations = []
-        failed_confirmations = []
-        total_weight = sum(rule.weight for _, rule in confirmations)
-        passed_weight = sum(rule.weight for result, rule in confirmations if result)
-        
-        for result, rule in confirmations:
-            if result:
-                passed_confirmations.append(rule.name)
-            else:
-                failed_confirmations.append(rule.name)
-        
-        # Score ponderado
-        weighted_score = passed_weight / total_weight if total_weight > 0 else 0.0
-        
-        # Score final (setup + confirmaciones)
-        setup_weight = config.get('setup_weight', 0.5)
-        final_score = (setup_weight * 1.0) + ((1 - setup_weight) * weighted_score)
-        
-        # Determinar confianza
-        if final_score >= 0.85:
-            confidence = 'VERY_HIGH'
-        elif final_score >= 0.67:
-            confidence = 'HIGH'
-        elif final_score >= 0.60:
-            confidence = 'MEDIUM'
-        else:
-            confidence = 'LOW'
-        
-        # Determinar si mostrar (filtro descarte < 0.60)
-        show_threshold = config.get('show_threshold', 0.60)
-        should_show = final_score >= show_threshold
-        
-        return ScoringResult(
-            setup_valid=setup_valid,
-            confirmations_passed=len(passed_confirmations),
-            confirmations_total=len(confirmations),
-            final_score=final_score,
-            confidence_level=confidence,
-            should_show=should_show,
-            details={
-                'symbol': symbol,
-                'passed_confirmations': passed_confirmations,
-                'failed_confirmations': failed_confirmations,
-                'weighted_score': weighted_score,
-                'show_threshold': show_threshold
-            },
-            failed_confirmations=failed_confirmations
-        )
-    
-    def _extract_confirmations_from_signal(self, signal: Dict, df: pd.DataFrame, symbol: str) -> List[Tuple[bool, ConfirmationRule]]:
-        """Extrae confirmaciones básicas de una señal"""
-        confirmations = []
-        
-        try:
-            last = df.iloc[-1]
-            
-            # Confirmación 1: RSI en rango operativo
-            if 'rsi' in df.columns:
-                rsi = last['rsi']
-                rsi_ok = 30 <= rsi <= 70
-                confirmations.append((rsi_ok, ConfirmationRule(
-                    "RSI_RANGE", 1.0, f"RSI en rango: {rsi:.1f}"
-                )))
-            
-            # Confirmación 2: ATR adecuado
-            if 'atr' in df.columns:
-                atr_current = last['atr']
-                atr_mean = df['atr'].tail(20).mean()
-                atr_ok = atr_current > atr_mean * 0.8
-                confirmations.append((atr_ok, ConfirmationRule(
-                    "ATR_ADEQUATE", 0.8, f"ATR: {atr_current:.5f} vs {atr_mean:.5f}"
-                )))
-            
-            # Confirmación 3: Dirección de vela
-            direction = signal.get('type', 'BUY')
-            candle_body = last['close'] - last['open']
-            if direction == 'BUY':
-                candle_ok = candle_body > 0
-            else:
-                candle_ok = candle_body < 0
-            
-            confirmations.append((candle_ok, ConfirmationRule(
-                "CANDLE_DIRECTION", 0.6, f"Vela en dirección {direction}"
-            )))
-            
-        except Exception as e:
-            logger.warning(f"Error extrayendo confirmaciones: {e}")
-        
-        return confirmations
+from core.scoring import ConfirmationRule, ScoringResult, FlexibleScoring
 
 
 # ============================================================================
@@ -707,9 +563,14 @@ class ConfidenceSystem:
         try:
             last = df.iloc[-1]
             
-            # Factor 1: Calidad del setup (basado en score si existe)
-            setup_score = signal.get('score', 0.5)
-            factors['setup_quality'] = min(1.0, setup_score)
+            # Factor 1: Calidad del setup (basado en score / setup_strength si existe)
+            setup_score = (
+                signal.get('score')
+                or signal.get('setup_strength')
+                or signal.get('quality_score')
+                or 0.75
+            )
+            factors['setup_quality'] = min(1.0, float(setup_score))
             
             # Factor 2: Condiciones de mercado
             if 'atr' in df.columns:

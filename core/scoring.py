@@ -124,54 +124,134 @@ class FlexibleScoring:
         signal = context.raw_signal
         df = context.dataframe
         
-        # Extraer confirmaciones del contexto de la señal
+        # Extraer confirmaciones dinámicas y no redundantes
         confirmations = self._extract_confirmations_from_signal(signal, df, symbol)
         
-        return self.evaluate_signal(symbol, True, confirmations)
-    
+        # Extraer calidad intrínseca del setup evaluada por la propia estrategia
+        setup_quality = self._extract_setup_quality(signal)
+        
+        return self.evaluate_signal(symbol, True, confirmations, setup_quality=setup_quality)
+
+    def _extract_setup_quality(self, signal: Dict) -> float:
+        """
+        Extrae la calidad intrínseca del setup calculada por la estrategia nativa.
+        - BTCEUR: signal['score'] (ej. 0.88 o 0.82)
+        - XAUUSD / EURUSD: signal['setup_strength'] (ej. 0.70 a 0.85)
+        - Genérico: signal['score'] o signal['quality_score']
+        Si no está presente o no es válido, usa 0.75 como baseline estándar de setup aprobado.
+        """
+        if not signal or not isinstance(signal, dict):
+            return 0.75
+            
+        raw_val = (
+            signal.get('score')
+            or signal.get('setup_strength')
+            or signal.get('quality_score')
+        )
+        
+        if raw_val is not None:
+            try:
+                val = float(raw_val)
+                if val > 1.0:
+                    val = val / 100.0
+                if 0.0 < val <= 1.0:
+                    return val
+            except (ValueError, TypeError):
+                pass
+                
+        return 0.75
+
     def _extract_confirmations_from_signal(self, signal: Dict, df: pd.DataFrame, symbol: str) -> List[Tuple[bool, ConfirmationRule]]:
-        """Extrae confirmaciones básicas de una señal"""
+        """
+        Extrae confirmaciones dinámicas y no redundantes de una señal.
+        Evalúa factores reales de mercado (disciplina de entrada respecto a EMA20, flujo
+        de momentum previo, salud de volatilidad, perfil R:R y volumen institucional)
+        en lugar de duplicar los filtros de entrada que la estrategia ya verificó.
+        """
         confirmations = []
         
         try:
+            if df is None or len(df) == 0:
+                return [(True, ConfirmationRule("SETUP_VALID", 1.0, "Setup técnico validado"))]
+
             last = df.iloc[-1]
+            direction = str(signal.get('type') or signal.get('direction') or 'BUY').upper()
             
-            # Confirmación 1: RSI en rango operativo
-            if 'rsi' in df.columns:
-                rsi = last['rsi']
-                rsi_ok = 30 <= rsi <= 70
-                confirmations.append((rsi_ok, ConfirmationRule(
-                    "RSI_RANGE", 1.0, f"RSI en rango: {rsi:.1f}"
+            # Confirmación 1: Disciplina de entrada respecto a EMA dinámica (evita chasing)
+            ema_col = None
+            for col in ['ema20', 'h1_ema20', 'ema_entry', 'ema50']:
+                if col in df.columns:
+                    ema_col = col
+                    break
+                    
+            if ema_col:
+                ema_val = float(last[ema_col])
+                price = float(last['close'])
+                if ema_val > 0:
+                    dist_ema = abs(price - ema_val) / ema_val
+                    max_dist = 0.012 if symbol == 'BTCEUR' else 0.005 if symbol == 'XAUUSD' else 0.0025
+                    entry_ok = dist_ema <= max_dist
+                    confirmations.append((entry_ok, ConfirmationRule(
+                        "ENTRY_DISCIPLINE", 1.0, f"Distancia a {ema_col}: {dist_ema:.2%} (max {max_dist:.2%})"
+                    )))
+            
+            # Confirmación 2: Alineación de momentum en las velas previas (flujo direccional vs espiga aislada)
+            if len(df) >= 4:
+                recent = df.iloc[-4:-1]
+                if direction == 'BUY':
+                    flow_aligned = (recent['close'] >= recent['open']).sum() >= 2
+                else:
+                    flow_aligned = (recent['close'] <= recent['open']).sum() >= 2
+                confirmations.append((bool(flow_aligned), ConfirmationRule(
+                    "MOMENTUM_ALIGNMENT", 0.9, f"Flujo direccional previo continuo para {direction}"
                 )))
             
-            # Confirmación 2: ATR adecuado
+            # Confirmación 3: Salud de volatilidad (expansión sin clímax/agotamiento de mercado)
             if 'atr' in df.columns:
-                atr_current = last['atr']
-                atr_mean = df['atr'].tail(20).mean()
-                atr_ok = atr_current > atr_mean * 0.8
-                confirmations.append((atr_ok, ConfirmationRule(
-                    "ATR_ADEQUATE", 0.8, f"ATR: {atr_current:.5f} vs {atr_mean:.5f}"
+                atr_current = float(last['atr'])
+                atr_mean = float(df['atr'].tail(20).mean())
+                if atr_mean > 0:
+                    ratio = atr_current / atr_mean
+                    vol_healthy = 0.85 <= ratio <= 1.85
+                    confirmations.append((vol_healthy, ConfirmationRule(
+                        "VOLATILITY_HEALTH", 0.8, f"Volatilidad saludable ({ratio:.2f}x media de 20)"
+                    )))
+            
+            # Confirmación 4: Perfil de Riesgo/Beneficio (R:R favorable)
+            entry = float(signal.get('entry') or signal.get('price') or last['close'])
+            sl = float(signal.get('sl') or signal.get('sl_price') or 0.0)
+            tp = float(signal.get('tp') or signal.get('tp_price') or 0.0)
+            if sl > 0 and tp > 0 and entry > 0:
+                sl_dist = abs(entry - sl)
+                tp_dist = abs(tp - entry)
+                rr = (tp_dist / sl_dist) if sl_dist > 0 else 0.0
+                rr_ok = rr >= 1.5
+                confirmations.append((rr_ok, ConfirmationRule(
+                    "RR_PROFILE", 0.7, f"R:R favorable: 1:{rr:.2f}"
                 )))
             
-            # Confirmación 3: Dirección de vela
-            direction = signal.get('type', 'BUY')
-            candle_body = last['close'] - last['open']
-            if direction == 'BUY':
-                candle_ok = candle_body > 0
-            else:
-                candle_ok = candle_body < 0
-            
-            confirmations.append((candle_ok, ConfirmationRule(
-                "CANDLE_DIRECTION", 0.6, f"Vela en dirección {direction}"
-            )))
-            
+            # Confirmación 5: Volumen institucional (si está presente y activo en el feed)
+            vol_col = 'volume' if 'volume' in df.columns else 'tick_volume' if 'tick_volume' in df.columns else None
+            if vol_col and df[vol_col].tail(20).sum() > 0:
+                vol_current = float(last[vol_col])
+                vol_mean = float(df[vol_col].tail(20).mean())
+                if vol_mean > 0:
+                    vol_ok = vol_current >= vol_mean * 0.90
+                    confirmations.append((vol_ok, ConfirmationRule(
+                        "VOLUME_SUPPORT", 0.6, f"Volumen relativo: {vol_current/vol_mean:.2f}x"
+                    )))
+                    
         except Exception as e:
             logger.warning(f"Error extrayendo confirmaciones: {e}")
-        
+            
+        if not confirmations:
+            confirmations.append((True, ConfirmationRule("SETUP_VALID", 1.0, "Setup técnico validado")))
+            
         return confirmations
     
     def evaluate_signal(self, symbol: str, setup_valid: bool, 
-                       confirmations: List[Tuple[bool, ConfirmationRule]]) -> ScoringResult:
+                       confirmations: List[Tuple[bool, ConfirmationRule]],
+                       setup_quality: Optional[float] = None) -> ScoringResult:
         """
         Evalúa una señal usando scoring flexible
         
@@ -179,6 +259,7 @@ class FlexibleScoring:
             symbol: Símbolo del instrumento
             setup_valid: Si el setup básico es válido
             confirmations: Lista de (resultado, regla) para confirmaciones
+            setup_quality: Calidad intrínseca calculada por la estrategia (0.0 a 1.0)
             
         Returns:
             ScoringResult con evaluación completa
@@ -216,12 +297,16 @@ class FlexibleScoring:
                 failed_confirmations.append(rule.name)
                 self.failed_rules[rule.name] += 1
         
-        # Score ponderado
+        # Score ponderado de confirmaciones dinámicas
         weighted_score = passed_weight / total_weight if total_weight > 0 else 0.0
         
-        # Score final (setup + confirmaciones)
+        # Calidad nativa del setup (sin forzar 1.0 artificial)
+        quality = 1.0 if setup_quality is None else max(0.1, min(1.0, float(setup_quality)))
+        
+        # Score final (setup nativo + confirmaciones dinámicas, sin techo artificial)
         setup_weight = config.get('setup_weight', 0.5)
-        final_score = (setup_weight * 1.0) + ((1 - setup_weight) * weighted_score)
+        final_score = (setup_weight * quality) + ((1 - setup_weight) * weighted_score)
+        final_score = round(final_score, 4)
         
         # Determinar confianza usando thresholds configurables
         confidence_level = self._calculate_confidence_level(final_score, symbol)
@@ -248,6 +333,7 @@ class FlexibleScoring:
             should_show=should_show,
             details={
                 'symbol': symbol,
+                'setup_quality': quality,
                 'passed_confirmations': passed_confirmations,
                 'failed_confirmations': failed_confirmations,
                 'weighted_score': weighted_score,
