@@ -440,22 +440,37 @@ class AutoSignalsService:
                     with open(rules_config_path, 'r') as f:
                         rules = json.load(f)
                     symbol_config = rules.get(symbol, {})
-                    strategy_name = symbol_config.get('strategy', 'ema50_200')
+                    strats_to_eval = symbol_config.get('active_strategies')
+                    if not strats_to_eval:
+                        strats_to_eval = [symbol_config.get('strategy', 'ema50_200')]
+                    elif isinstance(strats_to_eval, str):
+                        strats_to_eval = [strats_to_eval]
                 except Exception:
-                    strategy_name = 'ema50_200'
+                    strats_to_eval = ['ema50_200']
+                    symbol_config = {}
                 
-                # Usar el engine completo (mismo pipeline que replay)
-                result = engine.evaluate_signal(
-                    df, 
-                    symbol, 
-                    strategy_name,
-                    symbol_config,
-                    skip_duplicate_filter=False  # En producción SÍ usar filtro de duplicados
-                )
+                # Evaluar estrategias activas para el símbolo y seleccionar la mejor señal válida
+                selected_result = None
+                winning_strategy = None
+                for candidate_strat in strats_to_eval:
+                    candidate_res = engine.evaluate_signal(
+                        df, 
+                        symbol, 
+                        candidate_strat,
+                        symbol_config,
+                        skip_duplicate_filter=False  # En producción SÍ usar filtro de duplicados
+                    )
+                    if candidate_res.signal and candidate_res.should_show:
+                        if selected_result is None or (candidate_res.score or 0) > (selected_result.score or 0):
+                            selected_result = candidate_res
+                            winning_strategy = candidate_strat
                 
-                # Si no hay señal o no debe mostrarse, salir
-                if not result.signal or not result.should_show:
+                # Si ninguna estrategia activa generó señal que deba mostrarse, salir
+                if not selected_result or not selected_result.signal:
                     return False
+                
+                result = selected_result
+                strategy_name = winning_strategy or strats_to_eval[0]
                 
                 signal = result.signal
                 confidence = result.confidence

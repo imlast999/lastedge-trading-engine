@@ -51,6 +51,7 @@ STRATEGY_REGISTRY = {
     'xauusd':           lambda: get_strategy('XAUUSD'),
     'xauusd_simple':    lambda: get_strategy('XAUUSD'),
     'xauusd_partial':   lambda: _get_xauusd_partial(),
+    'xauusd_asian_london': lambda: _get_xauusd_asian_london(),
     'xauusd_advanced':  lambda: _get_xauusd_advanced(),
     'xauusd_surge':     lambda: _get_xauusd_surge(),             # Vault: squeeze & breakout
     'xauusd_reversal':  lambda: _get_xauusd_reversal(),          # descartada (1 señal/5000v)
@@ -95,6 +96,25 @@ def _get_xauusd_partial():
     try:
         from strategies.vault.xauusd import XAUUSDPartialStrategy
         return XAUUSDPartialStrategy()
+    except Exception:
+        pass
+    strat = get_strategy('XAUUSD')
+    if strat is not None:
+        return strat
+    from strategies.public.xauusd_public_breakout import XAUUSDPublicBreakoutStrategy
+    return XAUUSDPublicBreakoutStrategy()
+
+def _get_xauusd_asian_london():
+    try:
+        from strategies.vault.xauusd_asian_london import XAUUSDAsianLondonStrategy
+        return XAUUSDAsianLondonStrategy()
+    except Exception:
+        pass
+    try:
+        from strategies import STRATEGY_REGISTRY as GLOBAL_REG
+        cls = GLOBAL_REG.get('xauusd_asian_london') or GLOBAL_REG.get('XAUUSD_ASIAN_LONDON')
+        if cls:
+            return cls()
     except Exception:
         pass
     strat = get_strategy('XAUUSD')

@@ -1,12 +1,27 @@
 {
   "EURUSD": {
     "strategy": "eurusd_partial",
+    "active_strategies": [
+      "eurusd_partial"
+    ],
     "fallback_strategy": "eurusd_simple",
     "enabled": true,
     "risk_per_trade": 0.75,
     "max_daily_trades": 4,
     "min_rr_ratio": 1.5,
-    "min_score": 0.6,
+    "min_score": 0.65,
+    "strategy_settings": {
+      "eurusd_partial": {
+        "min_score": 0.65,
+        "show_threshold": 0.65,
+        "description": "EUR/USD Partial Close Momentum (10K Titular - PF 1.92, WR 53.4%, Sharpe 6.09)"
+      },
+      "eurusd_flow": {
+        "min_score": 0.70,
+        "show_threshold": 0.70,
+        "description": "EUR/USD Institutional Flow (Reserva Élite SMC)"
+      }
+    },
     "expires_minutes": 90,
     "active_sessions": [
       "london",
@@ -14,7 +29,7 @@
       "overlap"
     ],
     "avoid_news": true,
-    "description": "eurusd_partial — partial_close validado (Exit Research jul 2026, run 20260702_225143). PF=1.85, WR=54.1%, MC Ruin=0.0%, Stability=51.73",
+    "description": "eurusd_partial — partial_close validado (PF=1.92, WR=53.4%, Sharpe=6.09 a 30k velas)",
     "philosophy": "Momentum + Tendencia + Partial Close validado",
     "timeframes": [
       "H1"
@@ -39,23 +54,27 @@
     "weekend_exposure_guard": true
   },
   "XAUUSD": {
-    "strategy": "xauusd_partial",
+    "strategy": "xauusd_asian_london",
+    "active_strategies": [
+      "xauusd_asian_london",
+      "xauusd_partial"
+    ],
     "fallback_strategy": "xauusd_advanced",
     "enabled": true,
     "risk_per_trade": 0.6,
     "max_daily_trades": 3,
     "min_rr_ratio": 2.0,
-    "min_score": 0.6,
+    "min_score": 0.65,
     "strategy_settings": {
       "xauusd_asian_london": {
-        "min_score": 0.7,
-        "show_threshold": 0.7,
-        "description": "Pre-London Asian Range Expansion (10K Titular 2 - Calibrada)"
+        "min_score": 0.75,
+        "show_threshold": 0.75,
+        "description": "Pre-London Asian Range Expansion (10K Titular 1 - DD 0.74%, PF 2.39 Elite)"
       },
       "xauusd_partial": {
-        "min_score": 0.6,
-        "show_threshold": 0.6,
-        "description": "Gold Partial Close Fakeout (10K Titular 1)"
+        "min_score": 0.60,
+        "show_threshold": 0.60,
+        "description": "Gold Partial Close Fakeout (10K Titular 2 - +10,222p a 5 años)"
       }
     },
     "expires_minutes": 45,
@@ -73,8 +92,8 @@
       2100,
       2150
     ],
-    "description": "SIMPLIFICADO: Nivel psicológico ±10$ + Mecha >30% + Liquidez",
-    "philosophy": "Fakeouts + Rejection + Liquidez",
+    "description": "SIMPLIFICADO: Pre-London Asian Expansion + Nivel psicológico ±10$ + Mecha >30%",
+    "philosophy": "Asian/London Breakout + Fakeouts + Rejection + Liquidez",
     "timeframes": [
       "H1",
       "H4"
@@ -92,20 +111,36 @@
     "weekend_exposure_guard": true
   },
   "BTCEUR": {
-    "strategy": "btceur_trend_surge",
+    "strategy": "btceur_partial",
+    "active_strategies": [
+      "btceur_partial",
+      "btceur_trend_surge"
+    ],
     "fallback_strategy": "btc_trend_pullback_v1",
     "enabled": true,
     "risk_per_trade": 0.5,
     "max_daily_trades": 5,
     "min_rr_ratio": 1.5,
-    "min_score": 0.6,
+    "min_score": 0.65,
+    "strategy_settings": {
+      "btceur_partial": {
+        "min_score": 0.65,
+        "show_threshold": 0.65,
+        "description": "BTC Partial Close Momentum (10K Titular 1 - +422k pips, WR 57.7%, PF 1.81, DD 2.45%)"
+      },
+      "btceur_trend_surge": {
+        "min_score": 0.75,
+        "show_threshold": 0.75,
+        "description": "BTC Trend Surge H4/H1 (10K Titular 2 - +268k pips, PF 1.62, DD 3.22%, Swing Institucional)"
+      }
+    },
     "expires_minutes": 60,
     "active_sessions": [
       "all"
     ],
     "avoid_news": false,
-    "description": "BTCEUR Trend Surge: Macro H4 (EMA50>200) + Pullback EMA20 H1 + Filtro ATR y Volumen",
-    "philosophy": "Trend Following + Pullback Institucional H4/H1",
+    "description": "BTCEUR Dupla Titular: Partial Close Momentum (+422k p) + Trend Surge Macro H4/H1 (+268k p)",
+    "philosophy": "Momentum + Expansión + Trend Following Swing",
     "timeframes": [
       "H1",
       "H4"
