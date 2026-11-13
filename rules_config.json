@@ -46,6 +46,18 @@
     "max_daily_trades": 3,
     "min_rr_ratio": 2.0,
     "min_score": 0.6,
+    "strategy_settings": {
+      "xauusd_asian_london": {
+        "min_score": 0.7,
+        "show_threshold": 0.7,
+        "description": "Pre-London Asian Range Expansion (10K Titular 2 - Calibrada)"
+      },
+      "xauusd_partial": {
+        "min_score": 0.6,
+        "show_threshold": 0.6,
+        "description": "Gold Partial Close Fakeout (10K Titular 1)"
+      }
+    },
     "expires_minutes": 45,
     "active_sessions": [
       "london",

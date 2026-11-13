@@ -537,9 +537,10 @@ class ConfidenceSystem:
         # Determinar nivel
         confidence_level = self._score_to_level(confidence_score)
         
-        # Decisiones (LOW < 0.60 descartada, MEDIUM 0.60-0.66 manual, HIGH >= 0.67 auto)
-        should_show = confidence_score >= 0.60  # Umbral mínimo para mostrar en Dashboard/App
-        should_execute = confidence_score >= 0.67  # Umbral para auto-ejecución directa en MT5
+        # Decisiones (LOW < 0.60 descartada, MEDIUM 0.60-0.66 manual, HIGH >= 0.67 auto; respeta min_score específico de estrategia)
+        min_show = float(signal.get('min_score')) if (isinstance(signal, dict) and signal.get('min_score')) else 0.60
+        should_show = confidence_score >= min_show  # Umbral mínimo para mostrar en Dashboard/App
+        should_execute = confidence_score >= max(min_show, 0.67)  # Umbral para auto-ejecución directa en MT5
         
         return ConfidenceResult(
             confidence_level=confidence_level,

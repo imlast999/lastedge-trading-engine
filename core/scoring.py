@@ -81,7 +81,8 @@ class FlexibleScoring:
                     'setup_weight': 0.4 if symbol in ['EURUSD', 'BTCEUR'] else 0.5,
                     'rsi_range': (35, 75) if symbol == 'EURUSD' else (30, 70) if symbol == 'XAUUSD' else (40, 80),
                     'atr_multiplier': 0.9 if symbol == 'EURUSD' else 1.0 if symbol == 'XAUUSD' else 0.8,
-                    'confidence_thresholds': confidence_thresholds
+                    'confidence_thresholds': confidence_thresholds,
+                    'strategy_settings': symbol_rules.get('strategy_settings', {})
                 }
             
             logger.info("✓ Configuración de scoring cargada desde rules_config.json")
@@ -123,6 +124,7 @@ class FlexibleScoring:
         symbol = context.symbol
         signal = context.raw_signal
         df = context.dataframe
+        strategy = getattr(context, 'strategy', None)
         
         # Extraer confirmaciones dinámicas y no redundantes
         confirmations = self._extract_confirmations_from_signal(signal, df, symbol)
@@ -130,7 +132,7 @@ class FlexibleScoring:
         # Extraer calidad intrínseca del setup evaluada por la propia estrategia
         setup_quality = self._extract_setup_quality(signal)
         
-        return self.evaluate_signal(symbol, True, confirmations, setup_quality=setup_quality)
+        return self.evaluate_signal(symbol, True, confirmations, setup_quality=setup_quality, strategy=strategy)
 
     def _extract_setup_quality(self, signal: Dict) -> float:
         """
@@ -251,7 +253,8 @@ class FlexibleScoring:
     
     def evaluate_signal(self, symbol: str, setup_valid: bool, 
                        confirmations: List[Tuple[bool, ConfirmationRule]],
-                       setup_quality: Optional[float] = None) -> ScoringResult:
+                       setup_quality: Optional[float] = None,
+                       strategy: Optional[str] = None) -> ScoringResult:
         """
         Evalúa una señal usando scoring flexible
         
@@ -260,12 +263,16 @@ class FlexibleScoring:
             setup_valid: Si el setup básico es válido
             confirmations: Lista de (resultado, regla) para confirmaciones
             setup_quality: Calidad intrínseca calculada por la estrategia (0.0 a 1.0)
+            strategy: Nombre opcional de la estrategia para filtros específicos
             
         Returns:
             ScoringResult con evaluación completa
         """
         
         config = self.symbol_config.get(symbol, self.symbol_config['EURUSD'])
+        strategy_settings = config.get('strategy_settings', {})
+        strat_key = (strategy or '').lower().strip()
+        strat_cfg = strategy_settings.get(strat_key, {}) if strat_key else {}
         
         # Actualizar estadísticas
         self.stats['signals_evaluated'] += 1
@@ -311,8 +318,8 @@ class FlexibleScoring:
         # Determinar confianza usando thresholds configurables
         confidence_level = self._calculate_confidence_level(final_score, symbol)
         
-        # Determinar si mostrar
-        show_threshold = config.get('show_threshold', 0.50)
+        # Determinar si mostrar (soporta umbral por estrategia específica o símbolo)
+        show_threshold = strat_cfg.get('show_threshold') or strat_cfg.get('min_score') or config.get('show_threshold', 0.50)
         should_show = final_score >= show_threshold
         
         if should_show:
